@@ -15,12 +15,10 @@ module.exports = {
     if (Math.floor(Math.random() * 2)) {
       games[playerOne.id] = {opponent: playerTwo, playerTurn: 1, currentTurn: 1, moves: 0, board: newBoard()};
       games[playerTwo.id] = {opponent: playerOne, playerTurn: -1, currentTurn: 1, moves: 0, board: newBoard()};
-      console.log(games);
       return playerOne;
     } else {
       games[playerOne.id] = {opponent: playerTwo, playerTurn: -1, currentTurn: 1, moves: 0, board: newBoard()};
       games[playerTwo.id] = {opponent: playerOne, playerTurn: 1, currentTurn: 1, moves: 0, board: newBoard()};
-      console.log(games);
       return playerTwo;
     }
   },
@@ -143,7 +141,7 @@ function tallyHorizontalLeft(board, currentTurn, row, column) {
 }
 
 function tallyHorizontalRight(board, currentTurn, row, column) {
-  if (column < 6 && gameboard[row][column + 1] === currentTurn) {
+  if (column < 6 && board[row][column + 1] === currentTurn) {
     return currentTurn + tallyHorizontalRight(board, currentTurn, row, column + 1);
   }
 
@@ -178,7 +176,7 @@ function checkForwardDiagonalVictory(playerId, row, column) {
 
 function tallyForwardDiagonalLeft(board, currentTurn, row, column) {
   if (column > 0 && row < 5 && board[row + 1][column - 1] === currentTurn) {
-    return currentTurn + tallyForwardDiagonalLeft(row + 1, column - 1);
+    return currentTurn + tallyForwardDiagonalLeft(board, currentTurn, row + 1, column - 1);
   }
 
   return 0;
@@ -186,7 +184,7 @@ function tallyForwardDiagonalLeft(board, currentTurn, row, column) {
 
 function tallyForwardDiagonalRight(board, currentTurn, row, column) {
   if (column < 6 && row > 0 && board[row - 1][column + 1] === currentTurn) {
-    return currentTurn + tallyForwardDiagonalRight(row - 1, column + 1);
+    return currentTurn + tallyForwardDiagonalRight(board, currentTurn, row - 1, column + 1);
   }
 
   return 0;
@@ -208,7 +206,7 @@ function checkBackwardDiagonalVictory(playerId, row, column) {
 
 function tallyBackwardDiagonalLeft(board, currentTurn, row, column) {
   if (column > 0 && row > 0 && board[row - 1][column - 1] === currentTurn) {
-    return currentTurn + tallyBackwardDiagonalLeft(row - 1, column - 1);
+    return currentTurn + tallyBackwardDiagonalLeft(board, currentTurn, row - 1, column - 1);
   }
 
   return 0;
@@ -216,7 +214,7 @@ function tallyBackwardDiagonalLeft(board, currentTurn, row, column) {
 
 function tallyBackwardDiagonalRight(board, currentTurn, row, column) {
   if (column < 6 && row < 5 && board[row + 1][column + 1] === currentTurn) {
-    return currentTurn + tallyBackwardDiagonalRight(row + 1, column + 1);
+    return currentTurn + tallyBackwardDiagonalRight(board, currentTurn, row + 1, column + 1);
   }
 
   return 0;

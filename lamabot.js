@@ -21,7 +21,6 @@ bot.on('ready', () => {
 
 // create an event listener for messages
 bot.on('message', message => {
-  console.log(message.author);
   var rgx = /^(!lb)(\S*)\s*(.*)/g;
   var match = rgx.exec(message.content);
   if (match && match.length > 2) {
@@ -84,7 +83,7 @@ bot.on('message', message => {
                 // The player won! Good for him/her
                 message.channel.sendMessage(mention(message.author) + " wins!");
                 c4.removeGame(message.author);
-              } else if (c4.getMoveCount() === 42) {
+              } else if (c4.getMoveCount(message.author) === 42) {
                 // All spots have been filled up and nobody won, which is ridiculous
                 message.channel.sendMessage("Alright, we'll call it a draw.");
                 c4.removeGame(message.author);

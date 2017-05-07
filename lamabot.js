@@ -21,6 +21,7 @@ bot.on('ready', () => {
 
 // create an event listener for messages
 bot.on('message', message => {
+  console.log(message.author);
   var rgx = /^(!lb)(\S*)\s*(.*)/g;
   var match = rgx.exec(message.content);
   if (match && match.length > 2) {
@@ -36,7 +37,7 @@ bot.on('message', message => {
     } else if (match[2] === 'c4') {
       if (params[0] === 'board') {
         // Display the board the user is currently playing
-        message.channel.sendMessage(c4.printBoard());
+        message.channel.sendMessage(c4.printBoard(message.author));
       } else if (params[0] === 'challenge') {
         // Challenge another user to connect 4
         if (message.mentions.users.array().length > 0) {
@@ -46,6 +47,13 @@ bot.on('message', message => {
                                           " has thrown down the gauntlet. " + 
                                           mention(message.mentions.users.array()[0]) + 
                                           ", you have been challenged!");
+              var player = c4.initiateGame(message.author, message.mentions.users.array()[0]);
+              if (player !== null) {
+                message.channel.sendMessage(mention(player) + ", you go first.");
+                message.channel.sendMessage(c4.printBoard(message.author));
+              } else {
+                message.channel.sendMessage("I'm sorry, but both players must not currently be in a game.");
+              }
             } else {
               message.channel.sendMessage(mention(message.author) + 
                                           ", you can't challenge yourself you goof.");
@@ -66,23 +74,23 @@ bot.on('message', message => {
         } else {
           var column = parseInt(params[1] - 1)
           if (column != NaN && column >= 0 && column < 7) {
-            var row = c4.placeToken(column);
+            var row = c4.placeToken(message.author, column);
             if (row === false) {
               // Specified column is filled, or perhaps something else went wrong
               message.channel.sendMessage("Invalid placement. Column is probably filled.");
             } else {
-              message.channel.sendMessage(c4.printBoard());
-              if (c4.checkVictory(row, column)) {
+              message.channel.sendMessage(c4.printBoard(message.author));
+              if (c4.checkVictory(message.author, row, column)) {
                 // The player won! Good for him/her
-                message.channel.sendMessage("Player " + c4.getCurrentPlayer() + " wins!");
-                c4.resetGame();
+                message.channel.sendMessage(mention(message.author) + " wins!");
+                c4.removeGame(message.author);
               } else if (c4.getMoveCount() === 42) {
                 // All spots have been filled up and nobody won, which is ridiculous
                 message.channel.sendMessage("Alright, we'll call it a draw.");
-                c4.resetGame();
+                c4.removeGame(message.author);
               } else {
                 // No one won, and spots are still open to play, so just swap the active player
-                c4.swapPlayer();
+                c4.swapPlayer(message.author);
               }
             } 
           } else {

@@ -1,3 +1,7 @@
+/* 
+  Connect 4 module for Lamabot
+ */
+
 const EMPTY = ':white_circle:';
 const PLAYER_ONE = ':red_circle:';
 const PLAYER_TWO = ':large_blue_circle:';

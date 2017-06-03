@@ -7,34 +7,77 @@ const PLAYER_ONE = ':red_circle:';
 const PLAYER_TWO = ':large_blue_circle:';
 
 games = {};
-stats = {};
+players = {};
+/* Games {
+    id: <id>
+    playerOne: <userId>
+    playerTwo: <userId>
+    currentTurn: <int>
+    moves: <int>
+    board: <int[][]>
+  }
+*/
+/* Players {
+    id: <userId>
+    currentGame: <gameId>
+    challenge: {
+      initiated: <boolean>
+      opponent: <userId>
+    }
+    stats: {
+      wins: <int>
+      losses: <int>
+      ties: <int>
+    }
+  }
+*/
 
 module.exports = {
-  initiateGame: function (playerOne, playerTwo) {
-    if (games && games[playerOne.id]) {
-      return null;
-    }
+  challenge: function (playerOne, playerTwo) {
+    // Add players to the db if they aren't already
+    if (!players[playerOne.id]) players[playerOne.id] = {};
+    if (!players[playerTwo.id]) players[playerTwo.id] = {};
 
-    // Determine who goes first through RNG
-    if (Math.floor(Math.random() * 2)) {
-      games[playerOne.id] = {opponent: playerTwo, playerTurn: 1, currentTurn: 1, moves: 0, board: newBoard()};
-      games[playerTwo.id] = {opponent: playerOne, playerTurn: -1, currentTurn: 1, moves: 0, board: newBoard()};
-      return playerOne;
-    } else {
-      games[playerOne.id] = {opponent: playerTwo, playerTurn: -1, currentTurn: 1, moves: 0, board: newBoard()};
-      games[playerTwo.id] = {opponent: playerOne, playerTurn: 1, currentTurn: 1, moves: 0, board: newBoard()};
-      return playerTwo;
+    if (isChallengeable(playerOne.id) && isChallengeable(playerTwo.id)) {
+      players[playerOne.id].challenge = {initiated: true, opponent: playerTwo.id}
+      players[playerTwo.id].challenge = {initiated: false, opponent: playerOne.id}
+      return true;
     }
+    return null;
+  },
+
+  acceptGame: function (player) {
+    if (players[player.id].challenge && players[player.id].challenge.initiated === false && !players[player.id].currentGame) {
+      var opponent = players[player.id].challenge.opponent;
+      players[player.id].currentGame = player.id;
+      players[opponent].currentGame = player.id;
+      if (Math.floor(Math.random() * 2)) {
+        games[player.id] = {playerOne: player.id, playerTwo: opponent, currentTurn: 1, moves: 0, board: newBoard()};
+        return player.id;
+      } else {
+        games[player.id] = {playerOne: opponent, playerTwo: player.id, currentTurn: 1, moves: 0, board: newBoard()};
+        return opponent;
+      }
+    }
+    return null;
+  },
+
+  rejectGame: function (player) {
+    if (players[player.id].challenge && !players[player.id].currentGame) {
+      var opponent = players[player.id].challenge.opponent;
+      players[player.id].challenge = null;
+      players[opponent].challenge = null;
+      return opponent;
+    }
+    return null;
   },
 
   printBoard: function (player) {
-    if (games && games[player.id]) {
-      board = games[player.id].playerTurn === 1 ? mention(player) + ' ' + PLAYER_ONE + ' vs ' 
-      + mention(games[player.id].opponent) + ' ' + PLAYER_TWO
-      : mention(games[player.id].opponent) + ' ' + PLAYER_ONE + ' vs ' + mention(player) + ' ' 
-      + PLAYER_TWO;
-      games[player.id].board.forEach(row => {
-        board = board.concat('\n');
+    if (players[player.id] && players[player.id].currentGame) {
+      game = games[players[player.id].currentGame];
+      board = mention(game.playerOne) + " " + PLAYER_ONE + " vs " + mention(game.playerTwo) + " " + PLAYER_TWO;
+      game.board.forEach(row => {
+        board = board.concat("\n");
         row.forEach(space => {
           if (space === 0) {
             board = board.concat(EMPTY);
@@ -45,62 +88,57 @@ module.exports = {
           }
         });
       });
-      board = board.concat('\n:one::two::three::four::five::six::seven:');
+      board = board.concat("\n:one::two::three::four::five::six::seven:");
       return board;
     }
-
-    return (null);
+    return null;
   },
 
   placeToken: function (player, column) {
     if (isPlayerTurn(player.id)) {
-      var gameboard = games[player.id].board;
-      for (i = 5; i >=0; i--) {
-        if (gameboard[i][column] === 0) {
-          // Update opponent's board when we swap players
-          // If a win/draw occurs, no reason to update the opponent's board 
-          // since we're wiping everything
-          gameboard[i][column] = games[player.id].playerTurn;
-          games[player.id].board = gameboard;
-          games[player.id].moves++;
+      var game = games[players[player.id].currentGame];
+      var board = game.board;
+      for (i = 5; i >= 0; i--) {
+        if (board[i][column] === 0) {
+          board[i][column] = game.currentTurn;
           return i;
         }
       }
     }
-    return false;
+    return null;
   },
 
   checkVictory: function (player, row, column) {
-    if (checkHorizontalVictory(player.id, row, column) || 
-        checkVerticalVictory(player.id, row, column) ||
-        checkForwardDiagonalVictory(player.id, row, column) || 
-        checkBackwardDiagonalVictory(player.id, row, column)) {
+    var gameId = players[player.id].currentGame;
+    if (checkHorizontalVictory(gameId, row, column) || 
+        checkVerticalVictory(gameId, row, column) ||
+        checkForwardDiagonalVictory(gameId, row, column) || 
+        checkBackwardDiagonalVictory(gameId, row, column)) {
       return true;
     }
     return false;
   },
 
-  getMoveCount: function (player) {
-    return games[player.id].moves;
+  checkDraw: function (player) {
+    return games[players[player.id].currentGame].moves >= 42;
   },
 
-  // Swaps the active player in a game, and copies the results of the previous turn 
-  // to the opponent's storage
   swapPlayer: function (player) {
-    games[player.id].currentTurn *= -1;
-
-    var game = games[player.id];
-    var opponentId = game.opponent.id;
-    games[opponentId].board = game.board;
-    games[opponentId].currentTurn = game.currentTurn;
-    games[opponentId].moves = game.moves;
+    games[players[player.id].currentGame].currentTurn *= -1;
   },
 
   removeGame: function (player) {
-    var opponentId = games[player.id].opponent.id;
-    delete games[player.id];
-    delete games[opponentId];
+    var opponent = players[player.id].challenge.opponent;
+    delete games[players[player.id].currentGame];
+    delete players[player.id].currentGame;
+    delete players[player.id].challenge;
+    delete players[opponent].currentGame;
+    delete players[opponent].challenge;
   }
+}
+
+function isChallengeable(playerId) {
+  return !players[playerId].challenge;
 }
 
 function newBoard() {
@@ -114,22 +152,29 @@ function newBoard() {
   ]
 }
 
+function playerHasGame(playerId) {
+  return (players[playerId] && players[playerId].currentGame);
+}
+
 function isPlayerTurn(playerId) {
-  if (games && games[playerId] && games[playerId].playerTurn === games[playerId].currentTurn) {
+  var game = playerHasGame(playerId) ? games[players[playerId].currentGame] : null;
+  if (game && ((game.playerOne === playerId && game.currentTurn === 1) 
+      || (game.playerTwo === playerId && game.currentTurn === -1))) {
     return true;
   }
+
   return false;
 }
 
 // TODO: Merge some of these checkVictory functions together
 // -
-function checkHorizontalVictory(playerId, row, column) {
-  var game = games[playerId];
-  var score = game.playerTurn;
-  score += tallyHorizontalLeft(game.board, game.playerTurn, row, column) 
-        + tallyHorizontalRight(game.board, game.playerTurn, row, column);
-
+function checkHorizontalVictory(gameId, row, column) {
+  var game = games[gameId];
+  var score = game.currentTurn;
+  score += tallyHorizontalLeft(game.board, game.currentTurn, row, column) 
+        + tallyHorizontalRight(game.board, game.currentTurn, row, column);
   if (Math.abs(score) >= 4) {
+    console.log("Victory: Horizontal");
     return true;
   }
 
@@ -153,11 +198,12 @@ function tallyHorizontalRight(board, currentTurn, row, column) {
 }
 
 // |
-function checkVerticalVictory(playerId, row, column) {
+function checkVerticalVictory(gameId, row, column) {
   // Only need to check below this spot, since there are no tokens above it
-  var game = games[playerId];
+  var game = games[gameId];
   if (row < 3 && Math.abs(game.board[row][column] + game.board[row + 1][column] +
                           game.board[row + 2][column] + game.board[row + 3][column]) === 4) {
+    console.log("Victory: Vertical");
     return true;
   }
   
@@ -165,13 +211,14 @@ function checkVerticalVictory(playerId, row, column) {
 }
 
 // /
-function checkForwardDiagonalVictory(playerId, row, column) {
-  var game = games[playerId];
-  var score = game.playerTurn;
-  score += tallyForwardDiagonalLeft(game.board, game.playerTurn, row, column) 
-        + tallyForwardDiagonalRight(game.board, game.playerTurn, row, column);
+function checkForwardDiagonalVictory(gameId, row, column) {
+  var game = games[gameId];
+  var score = game.currentTurn;
+  score += tallyForwardDiagonalLeft(game.board, game.currentTurn, row, column) 
+        + tallyForwardDiagonalRight(game.board, game.currentTurn, row, column);
 
   if (Math.abs(score) >= 4) {
+    console.log("Victory: Forward Diagonal");
     return true;
   }
 
@@ -195,13 +242,14 @@ function tallyForwardDiagonalRight(board, currentTurn, row, column) {
 }
 
 // \
-function checkBackwardDiagonalVictory(playerId, row, column) {
-  var game = games[playerId];
-  var score = game.playerTurn;
-  score += tallyBackwardDiagonalLeft(game.board, game.playerTurn, row, column) 
-        + tallyBackwardDiagonalRight(game.board, game.playerTurn, row, column);
+function checkBackwardDiagonalVictory(gameId, row, column) {
+  var game = games[gameId];
+  var score = game.currentTurn;
+  score += tallyBackwardDiagonalLeft(game.board, game.currentTurn, row, column) 
+        + tallyBackwardDiagonalRight(game.board, game.currentTurn, row, column);
 
   if (Math.abs(score) >= 4) {
+    console.log("Victory: Backward Diagonal");
     return true;
   }
 
@@ -225,5 +273,8 @@ function tallyBackwardDiagonalRight(board, currentTurn, row, column) {
 }
 
 function mention(user) {
+  if (typeof user === "string") {
+    return "<@" + user + ">";
+  }
   return "<@" + user.id + ">";
 }

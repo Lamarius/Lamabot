@@ -56,3 +56,6 @@ typings/
 
 # dotenv environment variables file
 .env
+
+# super secret keys and stuff
+keys

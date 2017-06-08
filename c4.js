@@ -74,8 +74,8 @@ module.exports = {
 
   printBoard: function (player) {
     if (players[player.id] && players[player.id].currentGame) {
-      game = games[players[player.id].currentGame];
-      board = mention(game.playerOne) + " " + PLAYER_ONE + " vs " + mention(game.playerTwo) + " " + PLAYER_TWO;
+      var game = games[players[player.id].currentGame];
+      var board = mention(game.playerOne) + " " + PLAYER_ONE + " vs " + mention(game.playerTwo) + " " + PLAYER_TWO;
       game.board.forEach(row => {
         board = board.concat("\n");
         row.forEach(space => {

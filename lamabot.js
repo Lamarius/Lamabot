@@ -47,17 +47,19 @@ bot.on('message', message => {
       } else if (match[2] === 'c4') {
         if (params[0] === 'accept') {
           // Accept a challenge and start a new game
-          var player = c4.acceptGame(author);
-          if (player !== null) {
-            var message = [
-              mention(author) + " has accept the challenge!",
-              mention(player) + " has the first turn.",
-              c4.printBoard(author)
-            ]
-            sendMessage(channel, message);
-          } else {
-            sendMessage(channel, "I'm sorry " + mention(author) + ", but it looks like you have no challenges.");
-          }
+          c4.acceptGame(author.id, function(playerOne) {
+            if (playerOne) {
+              console.log(playerOne);
+              var message = [
+                mention(author) + " has accepted the challenge!",
+                mention(playerOne) + " has the first turn.",
+                c4.printBoard(author)
+              ];
+              sendMessage(channel, message);
+            } else {
+              sendMessage(channel, "I'm sorry " + mention(author) + ", but it looks like you have no challenges.");
+            }
+          });
         } else if (params[0] === 'board') {
           // Display the board the user is currently playing
           var board = c4.printBoard(author);
@@ -69,15 +71,17 @@ bot.on('message', message => {
           if (mentions.length > 0) {
             if (mentions.length === 1) {
               if (mentions[0] != author) {
-                if (c4.challenge(author, mentions[0])) {
-                  sendMessage(channel, mention(mentions[0]) + ", you have been challenged by "
+                c4.challenge(author.id, mentions[0].id, function(result) {
+                  if (result) {
+                    sendMessage(channel, mention(mentions[0]) + ", you have been challenged by "
                               + mention(author) + ". Type ``!lbc4 accept`` to accept this challenge,"
                               + " or ``!lbc4 reject`` to reject it.");
-                } else {
-                  // At least one of the players is currently in a game, though I suppose something
-                  // else could be wrong
-                  sendMessage(channel, "I'm sorry, neither player can have an active game or challenge.");
-                }
+                  } else {
+                    // At least one of the players is currently in a game, though I suppose something
+                    // else could be wrong
+                    sendMessage(channel, "I'm sorry, neither player can have an active game or challenge.");
+                  }
+                });
               } else {
                 // Player tried to challenge himself/herself
                 sendMessage(channel, mention(author) + ", you can't challenge yourself you goof.");
@@ -173,10 +177,10 @@ function sendMessage(channel, content, options) {
 }
 
 function mention(user) {
-  if (typeof user === 'string') {
-    return "<@" + user + ">";
+  if (user.id) {
+    return "<@" + user.id + ">";
   }
-  return "<@" + user.id + ">";
+  return "<@" + user + ">";
 }
 
 function displayHelpEmbed(channel, helpTopic) {

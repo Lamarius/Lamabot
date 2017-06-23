@@ -6,8 +6,17 @@ const EMPTY = ':white_circle:';
 const PLAYER_ONE = ':red_circle:';
 const PLAYER_TWO = ':large_blue_circle:';
 
-games = {};
-players = {};
+var mysql = require('mysql');
+var connectionInfo = require('./connectionInfo.js')
+var connection = mysql.createConnection({
+  host: connectionInfo.host,
+  user: connectionInfo.user,
+  password: connectionInfo.password,
+  database: connectionInfo.database
+});
+
+var games = {};
+var players = {};
 /* Games {
     id: <id>
     playerOne: <userId>
@@ -34,16 +43,31 @@ players = {};
 
 module.exports = {
   challenge: function (playerOne, playerTwo) {
-    // Add players to the db if they aren't already
-    if (!players[playerOne.id]) players[playerOne.id] = {};
-    if (!players[playerTwo.id]) players[playerTwo.id] = {};
-
-    if (isChallengeable(playerOne.id) && isChallengeable(playerTwo.id)) {
-      players[playerOne.id].challenge = {initiated: true, opponent: playerTwo.id}
-      players[playerTwo.id].challenge = {initiated: false, opponent: playerOne.id}
-      return true;
-    }
-    return null;
+    canChallenge(playerOne, playerTwo, function (error, result) {
+      if (error) {
+        throw error;
+      } else {
+        if (result === true) {
+          createChallenge(playerOne, playerTwo, function (error, result) {
+            if (error) {
+              throw error;
+            } else {
+              var challengeId = result;
+              setChallenge(playerOne, playerTwo, challengeId, function (error, result) {
+                if (error) {
+                  throw error;
+                } else {
+                  console.log(result);
+                  return result;
+                }
+              })
+            }
+          });
+        } else {
+          return null;
+        }
+      }
+    });
   },
 
   acceptGame: function (player) {
@@ -135,6 +159,42 @@ module.exports = {
     delete players[opponent].currentGame;
     delete players[opponent].challenge;
   }
+}
+
+function canChallenge(playerOne, playerTwo, callback) {
+  var sql = 'SELECT * FROM c4challenges WHERE challenger = ? OR challenged = ? OR challenger = ? OR challenged = ?';
+  var values = [playerOne.id, playerOne.id, playerTwo.id, playerTwo.id];
+  connection.query(sql, values, function (error, result) {
+    if (error) {
+      callback(error, null);
+    } else {
+      callback(null, result.length === 0);
+    }
+  });
+}
+
+function createChallenge(playerOne, playerTwo, callback) {
+  var sql = 'INSERT INTO c4challenges SET ?';
+  var values = {challenger: playerOne.id, challenged: playerTwo.id};
+  connection.query(sql, values, function (error, result) {
+    if (error) {
+      callback(error, null);
+    } else {
+      callback(null, result.insertId);
+    }
+  })
+}
+
+function setChallenge(playerOne, playerTwo, challengeId, callback) {
+  var sql = 'INSERT INTO c4users (id, wins, losses, ties, challengeId) VALUES ? ON DUPLICATE KEY UPDATE challengeId = ?';
+  var values = [[[playerOne.id, 0, 0, 0, challengeId], [playerTwo.id, 0, 0, 0, challengeId]], challengeId];
+  connection.query(sql, values, function (error, result) {
+    if (error) {
+      callback(error, null);
+    } else {
+      callback(null, true);
+    }
+  })
 }
 
 function isChallengeable(playerId) {

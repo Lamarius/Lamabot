@@ -99,27 +99,33 @@ module.exports = {
     return null;
   },
 
-  printBoard: function (player) {
-    // if (players[player.id] && players[player.id].currentGame) {
-    //   var game = games[players[player.id].currentGame];
-    //   var board = mention(game.playerOne) + " " + PLAYER_ONE + " vs " + mention(game.playerTwo) + " " + PLAYER_TWO;
-    //   game.board.forEach(row => {
-    //     board = board.concat("\n");
-    //     row.forEach(space => {
-    //       if (space === 0) {
-    //         board = board.concat(EMPTY);
-    //       } else if (space === 1) {
-    //         board = board.concat(PLAYER_ONE);
-    //       } else {
-    //         board = board.concat(PLAYER_TWO);
-    //       }
-    //     });
-    //   });
-    //   board = board.concat("\n:one::two::three::four::five::six::seven:");
-    //   return board;
-    // }
-    // return null;
-    return "pretend the board has been printed"
+  printBoard: function (playerId) {
+    getGame(playerId, function(error, game) {
+      if (error) {
+        throw error;
+      } else {
+        if (game) {
+          var boardMessage = mention(game.player1) + " " + PLAYER_ONE + " vs " + mention(game.player2) + " " + PLAYER_TWO;
+          var parsedBoard = JSON.parse(game.board);
+          parsedBoard.forEach(row => {
+            boardMessage.concat("\n");
+            row.forEach(space => {
+              if (space === 0) {
+                boardMessage = boardMessage.concat(EMPTY);
+              } else if (space === 1) {
+                boardMessage = boardMessage.concat(PLAYER_ONE);
+              } else {
+                boardMessage = boardMessage.concat(PLAYER_TWO);
+              }
+            });
+          });
+          boardMessage = boardMessage.concat("\n:one::two::three::four::five::six::seven:");
+          return boardMessage;
+        } else {
+          return null;
+        }
+      }
+    });
   },
 
   placeToken: function (player, column) {
@@ -243,6 +249,38 @@ function setGame(playerOneId, playerTwoId, gameId, callback) {
       callback(error, null);
     } else {
       callback(null, results.changedRows);
+    }
+  });
+}
+
+function getGame(playerId, callback) {
+  getGameId(playerId, function (error, results) {
+    if (error) {
+      callback(error, null);
+    } else {
+      var sql = 'SELECT * FROM c4games WHERE id = ?';
+      var values = results.gameId;
+
+      connection.query(sql, values, function(error, results) {
+        if (error) {
+          callback(error, null);
+        } else {
+          callback(null, results);
+        }
+      });
+    }
+  });
+}
+
+function getGameId(playerId, callback) {
+  var sql = 'SELECT gameId FROM c4users WHERE id = ?';
+  var values = [playerId];
+
+  connection.query(sql, values, function(error, results) {
+    if (error) {
+      callback(error, null);
+    } else {
+      callback(null, results);
     }
   });
 }

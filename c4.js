@@ -99,7 +99,7 @@ module.exports = {
     return null;
   },
 
-  printBoard: function (playerId) {
+  printBoard: function (playerId, callback) {
     getGame(playerId, function(error, game) {
       if (error) {
         throw error;
@@ -107,8 +107,10 @@ module.exports = {
         if (game) {
           var boardMessage = mention(game.player1) + " " + PLAYER_ONE + " vs " + mention(game.player2) + " " + PLAYER_TWO;
           var parsedBoard = JSON.parse(game.board);
+          console.log(parsedBoard);
           parsedBoard.forEach(row => {
-            boardMessage.concat("\n");
+            console.log('hi');
+            boardMessage = boardMessage.concat("\n");
             row.forEach(space => {
               if (space === 0) {
                 boardMessage = boardMessage.concat(EMPTY);
@@ -120,9 +122,10 @@ module.exports = {
             });
           });
           boardMessage = boardMessage.concat("\n:one::two::three::four::five::six::seven:");
-          return boardMessage;
+          console.log(boardMessage);
+          return callback(boardMessage);
         } else {
-          return null;
+          return callback(null);
         }
       }
     });
@@ -257,7 +260,7 @@ function getGame(playerId, callback) {
   getGameId(playerId, function (error, results) {
     if (error) {
       callback(error, null);
-    } else {
+    } else if (results) {
       var sql = 'SELECT * FROM c4games WHERE id = ?';
       var values = results.gameId;
 
@@ -265,9 +268,11 @@ function getGame(playerId, callback) {
         if (error) {
           callback(error, null);
         } else {
-          callback(null, results);
+          callback(null, results[0]);
         }
       });
+    } else {
+      return callback(null, null);
     }
   });
 }
@@ -280,7 +285,7 @@ function getGameId(playerId, callback) {
     if (error) {
       callback(error, null);
     } else {
-      callback(null, results);
+      callback(null, results[0]);
     }
   });
 }

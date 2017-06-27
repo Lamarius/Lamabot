@@ -49,23 +49,27 @@ bot.on('message', message => {
           // Accept a challenge and start a new game
           c4.acceptGame(author.id, function(playerOne) {
             if (playerOne) {
-              console.log(playerOne);
-              var message = [
-                mention(author) + " has accepted the challenge!",
-                mention(playerOne) + " has the first turn.",
-                c4.printBoard(author)
-              ];
-              sendMessage(channel, message);
+              c4.printBoard(author.id, function(board) {
+                var message = [
+                  mention(author) + " has accepted the challenge!",
+                  mention(playerOne) + " has the first turn.",
+                  board
+                ];
+                sendMessage(channel, message);
+              });
             } else {
               sendMessage(channel, "I'm sorry " + mention(author) + ", but it looks like you have no challenges.");
             }
           });
         } else if (params[0] === 'board') {
           // Display the board the user is currently playing
-          var board = c4.printBoard(author);
-          if (board) {
-            sendMessage(channel, board);
-          }
+          c4.printBoard(author.id, function(board) {
+            if (board) {
+              sendMessage(channel, board);
+            } else {
+              sendMessage(channel, mention(author) + ", you have no game.");
+            }
+          });
         } else if (params[0] === 'challenge') {
           // Challenge another user to connect 4
           if (mentions.length > 0) {
@@ -108,7 +112,9 @@ bot.on('message', message => {
                 sendMessage(channel, "Invalid placement. Column is probably filled.");
               } else {
                 var message = [];
-                message.push(c4.printBoard(author));
+                c4.printBoard(author.id, function(board) {
+                  message.push(board);
+                });
                 if (c4.checkVictory(author, row, column)) {
                   // The player won! Good for him/her
                   message.push(mention(author) + " wins!");

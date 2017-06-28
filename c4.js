@@ -2,6 +2,8 @@
   Connect 4 module for Lamabot
  */
 
+const core = require('./core');
+
 const EMPTY = ':white_circle:';
 const PLAYER_ONE = ':red_circle:';
 const PLAYER_TWO = ':large_blue_circle:';
@@ -35,7 +37,6 @@ module.exports = {
                 if (error) {
                   throw error;
                 } else {
-                  console.log(result);
                   return callback(result);
                 }
               })
@@ -49,12 +50,11 @@ module.exports = {
   },
 
   acceptGame: function (playerId, callback) {
-    hasChallenge(playerId, function(error, challenge) {
+    getChallenge(playerId, function(error, challenge) {
       if (error) {
         throw error
       } else {
         if (challenge) {
-          console.log(challenge);
           // Create a new game, set player challenges to null and set game to new game
           var playerOne;
           var playerTwo;
@@ -73,10 +73,14 @@ module.exports = {
                 if (error) {
                   throw error;
                 } else {
-                  console.log(playerOne);
-                  return callback(playerOne);
+                  removeChallenge(playerId, function(error) {
+                    if (error) {
+                      throw error;
+                    }
+                    return callback(playerOne);
+                  });
                 }
-              })
+              });
             } else {
               // Shouldn't ever do this, but I'm protecting my butt in case we do
               return callback(null);
@@ -89,89 +93,97 @@ module.exports = {
     });
   },
 
-  rejectGame: function (player) {
-    if (players[player.id].challenge && !players[player.id].currentGame) {
-      var opponent = players[player.id].challenge.opponent;
-      players[player.id].challenge = null;
-      players[opponent].challenge = null;
-      return opponent;
-    }
-    return null;
+  rejectGame: function (playerId, callback) {
+    removeChallenge(playerId, function(error) {
+      if (error) {
+        throw error;
+      }
+      return callback(true);
+    });
   },
 
   printBoard: function (playerId, callback) {
-    getGame(playerId, function(error, game) {
+    getGameFromPlayerId(playerId, function(error, game) {
       if (error) {
         throw error;
+      } else if (game) {
+        return callback(parseBoard(game.player1, game.player2, JSON.parse(game.board)));
       } else {
-        if (game) {
-          var boardMessage = mention(game.player1) + " " + PLAYER_ONE + " vs " + mention(game.player2) + " " + PLAYER_TWO;
-          var parsedBoard = JSON.parse(game.board);
-          console.log(parsedBoard);
-          parsedBoard.forEach(row => {
-            console.log('hi');
-            boardMessage = boardMessage.concat("\n");
-            row.forEach(space => {
-              if (space === 0) {
-                boardMessage = boardMessage.concat(EMPTY);
-              } else if (space === 1) {
-                boardMessage = boardMessage.concat(PLAYER_ONE);
-              } else {
-                boardMessage = boardMessage.concat(PLAYER_TWO);
-              }
-            });
-          });
-          boardMessage = boardMessage.concat("\n:one::two::three::four::five::six::seven:");
-          console.log(boardMessage);
-          return callback(boardMessage);
-        } else {
-          return callback(null);
-        }
+        return callback(null);
       }
     });
   },
 
-  placeToken: function (player, column) {
-    if (isPlayerTurn(player.id)) {
-      var game = games[players[player.id].currentGame];
-      var board = game.board;
-      for (i = 5; i >= 0; i--) {
-        if (board[i][column] === 0) {
-          board[i][column] = game.currentTurn;
-          return i;
+  placeToken: function (playerId, column, callback) {
+    getGameFromPlayerId(playerId, function(error, game) {
+      if (error) {
+        throw error;
+      } else if (game) {
+        if ((game.player1 === playerId && game.currentTurn === 1) || (game.player2 === playerId && game.currentTurn === -1)) {
+          var board = JSON.parse(game.board);
+          var row = -1;
+          for (i = 5; i >= 0; i--) {
+            if (board[i][column] === 0) {
+              row = i;
+              break;
+            }
+          }
+          if (row !== -1) {
+            board[row][column] = game.currentTurn;
+            game.board = JSON.stringify(board);
+            game.currentTurn *= -1;
+            game.turnCount++;
+            updateGame(game, function(error, results) {
+              if (error) {
+                throw error;
+              }
+              if (isVictory(board, game.currentTurn * -1, row, column)) {
+                // Victory fanfare
+                removeGame(game.id, game.player1, game.player2, function(error, results) {
+                  if (error) {
+                    throw error;
+                  }
+                  return callback('victory', parseBoard(game.player1, game.player2, board));
+                });
+              } else if (game.turnCount >= 42) {
+                // Alright, we'll cal it a draw
+                removeGame(game.id, game.player1, game.player2, function(error, results) {
+                  if (error) {
+                    throw error;
+                  }
+                  return callback('draw', parseBoard(game.player1, game.player2, board));
+                });
+              } else {
+                return callback(game.player1 === playerId ? game.player2 : game.player1, parseBoard(game.player1, game.player2, board));
+              }
+            });
+          } else {
+            return callback(null);
+          }
         }
+      } else {
+        return callback(null);
       }
-    }
-    return null;
-  },
-
-  checkVictory: function (player, row, column) {
-    var gameId = players[player.id].currentGame;
-    if (checkHorizontalVictory(gameId, row, column) || 
-        checkVerticalVictory(gameId, row, column) ||
-        checkForwardDiagonalVictory(gameId, row, column) || 
-        checkBackwardDiagonalVictory(gameId, row, column)) {
-      return true;
-    }
-    return false;
-  },
-
-  checkDraw: function (player) {
-    return games[players[player.id].currentGame].moves >= 42;
-  },
-
-  swapPlayer: function (player) {
-    games[players[player.id].currentGame].currentTurn *= -1;
-  },
-
-  removeGame: function (player) {
-    var opponent = players[player.id].challenge.opponent;
-    delete games[players[player.id].currentGame];
-    delete players[player.id].currentGame;
-    delete players[player.id].challenge;
-    delete players[opponent].currentGame;
-    delete players[opponent].challenge;
+    });
   }
+}
+
+function parseBoard(playerOne, playerTwo, board) {
+  var message = core.mention(playerOne) + " " + PLAYER_ONE + " vs " + core.mention(playerTwo) + " " + PLAYER_TWO;
+  board.forEach(row => {
+    message = message.concat("\n");
+    row.forEach(space => {
+      if (space === 0) {
+        message = message.concat(EMPTY);
+      } else if (space === 1) {
+        message = message.concat(PLAYER_ONE);
+      } else {
+        message = message.concat(PLAYER_TWO);
+      }
+    });
+  });
+  message = message.concat("\n:one::two::three::four::five::six::seven:");
+  return message;
 }
 
 function canChallenge(playerOneId, playerTwoId, callback) {
@@ -179,10 +191,9 @@ function canChallenge(playerOneId, playerTwoId, callback) {
   var values = [playerOneId, playerOneId, playerTwoId, playerTwoId];
   connection.query(sql, values, function(error, results) {
     if (error) {
-      callback(error, null);
-    } else {
-      callback(null, results.length === 0);
+      return callback(error, null);
     }
+    callback(null, results.length === 0);
   });
 }
 
@@ -191,10 +202,9 @@ function createChallenge(playerOneId, playerTwoId, callback) {
   var values = {challenger: playerOneId, challenged: playerTwoId};
   connection.query(sql, values, function(error, results) {
     if (error) {
-      callback(error, null);
-    } else {
-      callback(null, results.insertId);
+      return callback(error, null);
     }
+    callback(null, results.insertId);
   });
 }
 
@@ -203,22 +213,44 @@ function setChallenge(playerOneId, playerTwoId, challengeId, callback) {
   var values = [[[playerOneId, 0, 0, 0, challengeId], [playerTwoId, 0, 0, 0, challengeId]], challengeId];
   connection.query(sql, values, function(error, results) {
     if (error) {
-      callback(error, null);
-    } else {
-      callback(null, true);
+      return callback(error, null);
     }
+    callback(null, true);
   });
 }
 
-function hasChallenge(playerId, callback) {
+function getChallenge(playerId, callback) {
   var sql = 'SELECT * FROM c4challenges WHERE challenged = ?';
   var values = [playerId];
   connection.query(sql, values, function(error, results) {
     if (error) {
-      callback(error, null);
-    } else {
-      callback(null, results[0]);
+      return callback(error, null);
     }
+    callback(null, results[0]);
+  });
+}
+
+function removeChallenge(playerId, callback) {
+  getChallenge(playerId, function(error, challenge) {
+    if (error) {
+      return callback(error, null);
+    }
+    var sql = 'DELETE FROM c4challenges WHERE id = ?';
+    var values = [challenge.id];
+    connection.query(sql, values, function(error, results) {
+      if (error) {
+        return callback(error, null);
+      }
+
+      sql = 'UPDATE c4users SET challengeId = ? WHERE challengeId = ?';
+      values = [null, challenge.id];
+      connection.query(sql, values, function(error, results) {
+        if (error) {
+          return callback(error, null);
+        }
+        callback(null, results);
+      });
+    });
   });
 }
 
@@ -236,10 +268,9 @@ function createGame(playerOneId, playerTwoId, callback) {
 
   connection.query(sql, values, function(error, results) {
     if (error) {
-      callback(error, null);
-    } else {
-      callback(null, results.insertId);
+      return callback(error, null);
     }
+    callback(null, results.insertId);
   });
 }
 
@@ -249,31 +280,51 @@ function setGame(playerOneId, playerTwoId, gameId, callback) {
 
   connection.query(sql, values, function(error, results) {
     if (error) {
-      callback(error, null);
-    } else {
-      callback(null, results.changedRows);
+      return callback(error, null);
     }
+    callback(null, results.changedRows);
   });
 }
 
-function getGame(playerId, callback) {
-  getGameId(playerId, function (error, results) {
-    if (error) {
-      callback(error, null);
-    } else if (results) {
-      var sql = 'SELECT * FROM c4games WHERE id = ?';
-      var values = results.gameId;
+function getGame(gameId, callback) {
+  var sql = 'SELECT * FROM c4games WHERE id = ?';
+  var values = [gameId];
 
-      connection.query(sql, values, function(error, results) {
+  connection.query(sql, values, function(error, results) {
+    if (error) {
+      return callback(error, null);
+    }
+    callback(null, results[0]);
+  });
+}
+
+function getGameFromPlayerId(playerId, callback) {
+  getGameId(playerId, function (error, gameId) {
+    if (error) {
+      return callback(error, null);
+    } else if (gameId) {
+      getGame(gameId, function(error, game) {
         if (error) {
-          callback(error, null);
+          return callback(error, null);
         } else {
-          callback(null, results[0]);
+          return callback(null, game);
         }
       });
     } else {
       return callback(null, null);
     }
+  });
+}
+
+function updateGame(game, callback) {
+  var sql = 'UPDATE c4games SET currentTurn = ?, board = ?, turnCount = ? WHERE id = ?';
+  var values = [game.currentTurn, game.board, game.turnCount, game.id];
+
+  connection.query(sql, values, function(error, results) {
+    if (error) {
+      return callback(error, null);
+    }
+    callback(null, results);
   });
 }
 
@@ -283,32 +334,30 @@ function getGameId(playerId, callback) {
 
   connection.query(sql, values, function(error, results) {
     if (error) {
-      callback(error, null);
-    } else {
-      callback(null, results[0]);
+      return callback(error, null);
     }
+    callback(null, results[0].gameId);
   });
 }
 
-// function newBoard() {
-//   return [
-//     [0,0,0,0,0,0,0],
-//     [0,0,0,0,0,0,0],
-//     [0,0,0,0,0,0,0],
-//     [0,0,0,0,0,0,0],
-//     [0,0,0,0,0,0,0],
-//     [0,0,0,0,0,0,0]
-//   ]
-// }
+function removeGame(gameId, playerOne, playerTwo, callback) {
+  // Should I actually delete the games? Might be useful to pull old games for some raisin
+  var sql = 'UPDATE c4users SET gameId = ? WHERE id = ? OR id = ?';
+  var values = [null, playerOne, playerTwo];
 
-function playerHasGame(playerId) {
-  return (players[playerId] && players[playerId].currentGame);
+  connection.query(sql, values, function(error, results) {
+    if (error) {
+      return callback(error, null);
+    }
+    callback(null, results);
+  });
 }
 
-function isPlayerTurn(playerId) {
-  var game = playerHasGame(playerId) ? games[players[playerId].currentGame] : null;
-  if (game && ((game.playerOne === playerId && game.currentTurn === 1) 
-      || (game.playerTwo === playerId && game.currentTurn === -1))) {
+function isVictory(board, currentTurn, row, column) {
+  if (checkHorizontalVictory(board, currentTurn, row, column) || 
+      checkVerticalVictory(board, row, column) ||
+      checkForwardDiagonalVictory(board, currentTurn, row, column) || 
+      checkBackwardDiagonalVictory(board, currentTurn, row, column)) {
     return true;
   }
 
@@ -317,11 +366,10 @@ function isPlayerTurn(playerId) {
 
 // TODO: Merge some of these checkVictory functions together
 // -
-function checkHorizontalVictory(gameId, row, column) {
-  var game = games[gameId];
-  var score = game.currentTurn;
-  score += tallyHorizontalLeft(game.board, game.currentTurn, row, column) 
-        + tallyHorizontalRight(game.board, game.currentTurn, row, column);
+function checkHorizontalVictory(board, currentTurn, row, column) {
+  var score = currentTurn;
+  score += tallyHorizontalLeft(board, currentTurn, row, column) 
+        + tallyHorizontalRight(board, currentTurn, row, column);
   if (Math.abs(score) >= 4) {
     console.log("Victory: Horizontal");
     return true;
@@ -347,11 +395,10 @@ function tallyHorizontalRight(board, currentTurn, row, column) {
 }
 
 // |
-function checkVerticalVictory(gameId, row, column) {
+function checkVerticalVictory(board, row, column) {
   // Only need to check below this spot, since there are no tokens above it
-  var game = games[gameId];
-  if (row < 3 && Math.abs(game.board[row][column] + game.board[row + 1][column] +
-                          game.board[row + 2][column] + game.board[row + 3][column]) === 4) {
+  if (row < 3 && Math.abs(board[row][column] + board[row + 1][column] +
+                          board[row + 2][column] + board[row + 3][column]) === 4) {
     console.log("Victory: Vertical");
     return true;
   }
@@ -360,11 +407,10 @@ function checkVerticalVictory(gameId, row, column) {
 }
 
 // /
-function checkForwardDiagonalVictory(gameId, row, column) {
-  var game = games[gameId];
-  var score = game.currentTurn;
-  score += tallyForwardDiagonalLeft(game.board, game.currentTurn, row, column) 
-        + tallyForwardDiagonalRight(game.board, game.currentTurn, row, column);
+function checkForwardDiagonalVictory(board, currentTurn, row, column) {
+  var score = currentTurn;
+  score += tallyForwardDiagonalLeft(board, currentTurn, row, column) 
+        + tallyForwardDiagonalRight(board, currentTurn, row, column);
 
   if (Math.abs(score) >= 4) {
     console.log("Victory: Forward Diagonal");
@@ -391,11 +437,10 @@ function tallyForwardDiagonalRight(board, currentTurn, row, column) {
 }
 
 // \
-function checkBackwardDiagonalVictory(gameId, row, column) {
-  var game = games[gameId];
-  var score = game.currentTurn;
-  score += tallyBackwardDiagonalLeft(game.board, game.currentTurn, row, column) 
-        + tallyBackwardDiagonalRight(game.board, game.currentTurn, row, column);
+function checkBackwardDiagonalVictory(board, currentTurn, row, column) {
+  var score = currentTurn;
+  score += tallyBackwardDiagonalLeft(board, currentTurn, row, column) 
+        + tallyBackwardDiagonalRight(board, currentTurn, row, column);
 
   if (Math.abs(score) >= 4) {
     console.log("Victory: Backward Diagonal");
@@ -419,11 +464,4 @@ function tallyBackwardDiagonalRight(board, currentTurn, row, column) {
   }
 
   return 0;
-}
-
-function mention(user) {
-  if (typeof user === "string") {
-    return "<@" + user + ">";
-  }
-  return "<@" + user.id + ">";
 }

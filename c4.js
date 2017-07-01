@@ -94,11 +94,14 @@ module.exports = {
   },
 
   rejectGame: function (playerId, callback) {
-    removeChallenge(playerId, function(error) {
+    removeChallenge(playerId, function(error, opponentId) {
       if (error) {
         throw error;
+      } else if (opponentId) {
+        return callback(opponentId);
+      } else {
+        return callback(null);
       }
-      return callback(true);
     });
   },
 
@@ -220,13 +223,22 @@ function setChallenge(playerOneId, playerTwoId, challengeId, callback) {
 }
 
 function getChallenge(playerId, callback) {
-  var sql = 'SELECT * FROM c4challenges WHERE challenged = ?';
+  var sql = 'SELECT challengeId FROM c4users WHERE id = ?';
   var values = [playerId];
   connection.query(sql, values, function(error, results) {
     if (error) {
       return callback(error, null);
+    } else {
+      sql = 'SELECT * from c4challenges WHERE id = ?';
+      values = [results[0].challengeId];
+      connection.query(sql, values, function(error, results) {
+        if (error) {
+          return callback(error, null);
+        } else {
+          return callback(null, results[0]);
+        }
+      });
     }
-    callback(null, results[0]);
   });
 }
 
@@ -235,22 +247,32 @@ function removeChallenge(playerId, callback) {
     if (error) {
       return callback(error, null);
     }
-    var sql = 'DELETE FROM c4challenges WHERE id = ?';
-    var values = [challenge.id];
-    connection.query(sql, values, function(error, results) {
-      if (error) {
-        return callback(error, null);
-      }
-
-      sql = 'UPDATE c4users SET challengeId = ? WHERE challengeId = ?';
-      values = [null, challenge.id];
+    if (challenge) {
+      console.log(challenge);
+      var sql = 'DELETE FROM c4challenges WHERE id = ?';
+      var values = [challenge.id];
       connection.query(sql, values, function(error, results) {
         if (error) {
           return callback(error, null);
-        }
-        callback(null, results);
+        } else {
+          console.log('i am here');
+          sql = 'UPDATE c4users SET challengeId = ? WHERE challengeId = ?';
+          values = [null, challenge.id];
+          connection.query(sql, values, function(error, results) {
+            if (error) {
+              return callback(error, null);
+            } else {
+              console.log('hi');
+              console.log(challenge);
+              console.log(results);
+              return callback(null, challenge.challenger === playerId ? challenge.challenged : challenge.challenger);
+            }
+          });
+        } 
       });
-    });
+    } else {
+      return callback(null, null);
+    }  
   });
 }
 

@@ -133,12 +133,13 @@ bot.on('message', message => {
             } 
           }
         } else if (params[0] === 'reject') {
-          var opponent = c4.rejectGame(author);
-          if (opponent) {
-            sendMessage(channel, core.mention(opponent) + ", " + core.mention(author) + " has rejected your challenge.");
-          } else {
-            sendMessage(channel, core.mention(author) + ", you have no challenge to reject.");
-          }
+          c4.rejectGame(author.id, function(opponent) {
+            if (opponent) {
+              sendMessage(channel, "The challenge between " + core.mention(author) + " and " + core.mention(opponent) + " has been rescinded.");
+            } else {
+              sendMessage(channel, core.mention(author) + ", you have no challenge to reject.");
+            }
+          });          
         }
 
       // TODO: Remove these commands
@@ -206,7 +207,7 @@ function displayHelpEmbed(channel, helpTopic) {
       },
       {
         name: "reject",
-        value: "Reject a challenge. Useful if you don't want to play with that scrub."
+        value: "Reject or rescind a challenge. Useful if you don't want to play with that scrub."
       }]
     } else {
       embed.title = "Help topic not found";

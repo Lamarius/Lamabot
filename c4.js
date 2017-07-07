@@ -15,11 +15,8 @@ var connection = mysql.createConnection({
   user: connectionInfo.user,
   password: connectionInfo.password,
   database: connectionInfo.database,
-  supportBigNumbers: connectionInfo.supportBigNumbers
+  supportBigNumbers: true
 });
-
-var games = {};
-var players = {};
 
 module.exports = {
   challenge: function (playerOneId, playerTwoId, callback) {
@@ -56,20 +53,20 @@ module.exports = {
       } else {
         if (challenge) {
           // Create a new game, set player challenges to null and set game to new game
-          var playerOne;
-          var playerTwo;
+          var playerOneId;
+          var playerTwoId;
           if (Math.round(Math.random())) {
-            playerOne = challenge.challenger;
-            playerTwo = challenge.challenged;
+            playerOneId = challenge.challenger;
+            playerTwoId = challenge.challenged;
           } else {
-            playerOne = challenge.challenged;
-            playerTwo = challenge.challenger;
+            playerOneId = challenge.challenged;
+            playerTwoId = challenge.challenger;
           }
-          createGame(playerOne, playerTwo, function(error, gameId) {
+          createGame(playerOneId, playerTwoId, function(error, gameId) {
             if (error) {
               throw error;
             } else if (gameId) {
-              setGame(playerOne, playerTwo, gameId, function(error, results) {
+              setGame(playerOneId, playerTwoId, gameId, function(error, results) {
                 if (error) {
                   throw error;
                 } else {
@@ -77,7 +74,7 @@ module.exports = {
                     if (error) {
                       throw error;
                     }
-                    return callback(playerOne);
+                    return callback(playerOneId);
                   });
                 }
               });
@@ -181,8 +178,8 @@ module.exports = {
   }
 }
 
-function parseBoard(playerOne, playerTwo, board) {
-  var message = core.mention(playerOne) + " " + PLAYER_ONE + " vs " + core.mention(playerTwo) + " " + PLAYER_TWO;
+function parseBoard(playerOneId, playerTwoId, board) {
+  var message = core.mention(playerOneId) + " " + PLAYER_ONE + " vs " + core.mention(playerTwoId) + " " + PLAYER_TWO;
   board.forEach(row => {
     message = message.concat("\n");
     row.forEach(space => {
@@ -372,10 +369,10 @@ function getGameId(playerId, callback) {
   });
 }
 
-function removeGame(gameId, playerOne, playerTwo, callback) {
+function removeGame(gameId, playerOneId, playerTwoId, callback) {
   // Should I actually delete the games? Might be useful to pull old games for some raisin
   var sql = 'UPDATE c4users SET gameId = ? WHERE id = ? OR id = ?';
-  var values = [null, playerOne, playerTwo];
+  var values = [null, playerOneId, playerTwoId];
 
   connection.query(sql, values, function(error, results) {
     if (error) {
@@ -409,9 +406,9 @@ function addLoss(playerId, callback) {
   });
 }
 
-function addTie(palyerOne, playerTwo, callback) {
+function addTie(palyerOne, playerTwoId, callback) {
   var sql = 'UPDATE c4users SET ties = ties + 1 WHERE id = ? OR id = ?';
-  var values = [playerOne, playerTwo];
+  var values = [playerOneId, playerTwoId];
 
   connection.query(sql, values, function(error, results) {
     if (error) {

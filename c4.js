@@ -136,6 +136,7 @@ module.exports = {
             game.board = JSON.stringify(board);
             game.currentTurn *= -1;
             game.turnCount++;
+            var opponentId = game.player1 === playerId ? game.player2 : game.player1;
             updateGame(game, function(error, results) {
               if (error) {
                 throw error;
@@ -146,6 +147,12 @@ module.exports = {
                   if (error) {
                     throw error;
                   }
+                  addWin(playerId, function(error, result) {
+                    if (error) throw error;
+                  });
+                  addLoss(opponentId, function(error, result) {
+                    if (error) throw error;
+                  });
                   return callback('victory', parseBoard(game.player1, game.player2, board));
                 });
               } else if (game.turnCount >= 42) {
@@ -154,10 +161,13 @@ module.exports = {
                   if (error) {
                     throw error;
                   }
+                  addTie(game.player1, game.player2, function(error, result) {
+                    if (error) throw error;
+                  });
                   return callback('draw', parseBoard(game.player1, game.player2, board));
                 });
               } else {
-                return callback(game.player1 === playerId ? game.player2 : game.player1, parseBoard(game.player1, game.player2, board));
+                return callback(opponentId, parseBoard(game.player1, game.player2, board));
               }
             });
           } else {
@@ -366,6 +376,42 @@ function removeGame(gameId, playerOne, playerTwo, callback) {
   // Should I actually delete the games? Might be useful to pull old games for some raisin
   var sql = 'UPDATE c4users SET gameId = ? WHERE id = ? OR id = ?';
   var values = [null, playerOne, playerTwo];
+
+  connection.query(sql, values, function(error, results) {
+    if (error) {
+      return callback(error, null);
+    }
+    callback(null, results);
+  });
+}
+
+function addWin(playerId, callback) {
+  var sql = 'UPDATE c4users SET wins = wins + 1 WHERE id = ?';
+  var values = [playerId];
+
+  connection.query(sql, values, function(error, results) {
+    if (error) {
+      return callback(error, null);
+    }
+    callback(null, results);
+  });
+}
+
+function addLoss(playerId, callback) {
+  var sql = 'UPDATE c4users SET losses = losses + 1 WHERE id = ?';
+  var values = [playerId];
+
+  connection.query(sql, values, function(error, results) {
+    if (error) {
+      return callback(error, null);
+    }
+    callback(null, results);
+  });
+}
+
+function addTie(palyerOne, playerTwo, callback) {
+  var sql = 'UPDATE c4users SET ties = ties + 1 WHERE id = ? OR id = ?';
+  var values = [playerOne, playerTwo];
 
   connection.query(sql, values, function(error, results) {
     if (error) {

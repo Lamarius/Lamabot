@@ -118,7 +118,6 @@ bot.on('message', message => {
                   message.push(board);
                   if (result === 'victory') {
                     // The player won! Good for him/her
-
                     message.push(core.mention(author) + " wins!");
                   } else if (result === 'draw') {
                     // It's a draw

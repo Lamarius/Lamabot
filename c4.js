@@ -255,23 +255,18 @@ function removeChallenge(playerId, callback) {
       return callback(error, null);
     }
     if (challenge) {
-      console.log(challenge);
       var sql = 'DELETE FROM c4challenges WHERE id = ?';
       var values = [challenge.id];
       connection.query(sql, values, function(error, results) {
         if (error) {
           return callback(error, null);
         } else {
-          console.log('i am here');
           sql = 'UPDATE c4users SET challengeId = ? WHERE challengeId = ?';
           values = [null, challenge.id];
           connection.query(sql, values, function(error, results) {
             if (error) {
               return callback(error, null);
             } else {
-              console.log('hi');
-              console.log(challenge);
-              console.log(results);
               return callback(null, challenge.challenger === playerId ? challenge.challenged : challenge.challenger);
             }
           });
@@ -304,8 +299,8 @@ function createGame(playerOneId, playerTwoId, callback) {
 }
 
 function setGame(playerOneId, playerTwoId, gameId, callback) {
-  var sql = 'UPDATE c4users SET challengeId = ?, gameId = ? WHERE id = ? OR id = ?';
-  var values = [0, gameId, playerOneId, playerTwoId];
+  var sql = 'UPDATE c4users SET gameId = ? WHERE id = ? OR id = ?';
+  var values = [gameId, playerOneId, playerTwoId];
 
   connection.query(sql, values, function(error, results) {
     if (error) {

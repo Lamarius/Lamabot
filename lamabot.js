@@ -76,17 +76,22 @@ bot.on('message', message => {
           if (mentions.length > 0) {
             if (mentions.length === 1) {
               if (mentions[0] != author) {
-                c4.challenge(author.id, mentions[0].id, function(result) {
-                  if (result) {
-                    sendMessage(channel, core.mention(mentions[0]) + ", you have been challenged by "
-                              + core.mention(author) + ". Type ``!lbc4 accept`` to accept this challenge,"
-                              + " or ``!lbc4 reject`` to reject it.");
-                  } else {
-                    // At least one of the players is currently in a game, though I suppose something
-                    // else could be wrong
-                    sendMessage(channel, "I'm sorry, neither player can have an active game or challenge.");
-                  }
-                });
+                if (mentions[0] != bot.user) {
+                  c4.challenge(author.id, mentions[0].id, function(result) {
+                    if (result) {
+                      sendMessage(channel, core.mention(mentions[0]) + ", you have been challenged by "
+                                + core.mention(author) + ". Type ``!lbc4 accept`` to accept this challenge,"
+                                + " or ``!lbc4 reject`` to reject it.");
+                    } else {
+                      // At least one of the players is currently in a game, though I suppose something
+                      // else could be wrong
+                      sendMessage(channel, "I'm sorry, neither player can have an active game or challenge.");
+                    }
+                  });
+                } else {
+                  // Player tried to challenge the bot
+                  sendMessage(channel, core.mention(author) + ", you can't challenge me.");
+                }
               } else {
                 // Player tried to challenge himself/herself
                 sendMessage(channel, core.mention(author) + ", you can't challenge yourself you goof.");

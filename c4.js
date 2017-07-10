@@ -2,164 +2,422 @@
   Connect 4 module for Lamabot
  */
 
+const core = require('./core');
+
 const EMPTY = ':white_circle:';
 const PLAYER_ONE = ':red_circle:';
 const PLAYER_TWO = ':large_blue_circle:';
 
-games = {};
-players = {};
-/* Games {
-    id: <id>
-    playerOne: <userId>
-    playerTwo: <userId>
-    currentTurn: <int>
-    moves: <int>
-    board: <int[][]>
-  }
-*/
-/* Players {
-    id: <userId>
-    currentGame: <gameId>
-    challenge: {
-      initiated: <boolean>
-      opponent: <userId>
-    }
-    stats: {
-      wins: <int>
-      losses: <int>
-      ties: <int>
-    }
-  }
-*/
+var mysql = require('mysql');
+var connectionInfo = require('./connectionInfo.js')
+var connection = mysql.createConnection({
+  host: connectionInfo.host,
+  user: connectionInfo.user,
+  password: connectionInfo.password,
+  database: connectionInfo.database,
+  supportBigNumbers: true
+});
 
 module.exports = {
-  challenge: function (playerOne, playerTwo) {
-    // Add players to the db if they aren't already
-    if (!players[playerOne.id]) players[playerOne.id] = {};
-    if (!players[playerTwo.id]) players[playerTwo.id] = {};
-
-    if (isChallengeable(playerOne.id) && isChallengeable(playerTwo.id)) {
-      players[playerOne.id].challenge = {initiated: true, opponent: playerTwo.id}
-      players[playerTwo.id].challenge = {initiated: false, opponent: playerOne.id}
-      return true;
-    }
-    return null;
-  },
-
-  acceptGame: function (player) {
-    if (players[player.id].challenge && players[player.id].challenge.initiated === false && !players[player.id].currentGame) {
-      var opponent = players[player.id].challenge.opponent;
-      players[player.id].currentGame = player.id;
-      players[opponent].currentGame = player.id;
-      if (Math.floor(Math.random() * 2)) {
-        games[player.id] = {playerOne: player.id, playerTwo: opponent, currentTurn: 1, moves: 0, board: newBoard()};
-        return player.id;
+  challenge: function (playerOneId, playerTwoId, callback) {
+    canChallenge(playerOneId, playerTwoId, function(error, result) {
+      if (error) {
+        throw error;
       } else {
-        games[player.id] = {playerOne: opponent, playerTwo: player.id, currentTurn: 1, moves: 0, board: newBoard()};
-        return opponent;
-      }
-    }
-    return null;
-  },
-
-  rejectGame: function (player) {
-    if (players[player.id].challenge && !players[player.id].currentGame) {
-      var opponent = players[player.id].challenge.opponent;
-      players[player.id].challenge = null;
-      players[opponent].challenge = null;
-      return opponent;
-    }
-    return null;
-  },
-
-  printBoard: function (player) {
-    if (players[player.id] && players[player.id].currentGame) {
-      var game = games[players[player.id].currentGame];
-      var board = mention(game.playerOne) + " " + PLAYER_ONE + " vs " + mention(game.playerTwo) + " " + PLAYER_TWO;
-      game.board.forEach(row => {
-        board = board.concat("\n");
-        row.forEach(space => {
-          if (space === 0) {
-            board = board.concat(EMPTY);
-          } else if (space === 1) {
-            board = board.concat(PLAYER_ONE);
-          } else {
-            board = board.concat(PLAYER_TWO);
-          }
-        });
-      });
-      board = board.concat("\n:one::two::three::four::five::six::seven:");
-      return board;
-    }
-    return null;
-  },
-
-  placeToken: function (player, column) {
-    if (isPlayerTurn(player.id)) {
-      var game = games[players[player.id].currentGame];
-      var board = game.board;
-      for (i = 5; i >= 0; i--) {
-        if (board[i][column] === 0) {
-          board[i][column] = game.currentTurn;
-          return i;
+        if (result === true) {
+          createChallenge(playerOneId, playerTwoId, function(error, result) {
+            if (error) {
+              throw error;
+            } else {
+              var challengeId = result;
+              setChallenge(playerOneId, playerTwoId, challengeId, function(error, result) {
+                if (error) {
+                  throw error;
+                } else {
+                  return callback(result);
+                }
+              })
+            }
+          });
+        } else {
+          return callback(null);
         }
       }
-    }
-    return null;
+    });
   },
 
-  checkVictory: function (player, row, column) {
-    var gameId = players[player.id].currentGame;
-    if (checkHorizontalVictory(gameId, row, column) || 
-        checkVerticalVictory(gameId, row, column) ||
-        checkForwardDiagonalVictory(gameId, row, column) || 
-        checkBackwardDiagonalVictory(gameId, row, column)) {
-      return true;
-    }
-    return false;
+  acceptGame: function (playerId, callback) {
+    getChallenge(playerId, function(error, challenge) {
+      if (error) {
+        throw error
+      } else {
+        if (challenge) {
+          // Create a new game, set player challenges to null and set game to new game
+          var playerOneId;
+          var playerTwoId;
+          if (Math.round(Math.random())) {
+            playerOneId = challenge.challenger;
+            playerTwoId = challenge.challenged;
+          } else {
+            playerOneId = challenge.challenged;
+            playerTwoId = challenge.challenger;
+          }
+          createGame(playerOneId, playerTwoId, function(error, gameId) {
+            if (error) {
+              throw error;
+            } else if (gameId) {
+              setGame(playerOneId, playerTwoId, gameId, function(error, results) {
+                if (error) {
+                  throw error;
+                } else {
+                  removeChallenge(playerId, function(error) {
+                    if (error) {
+                      throw error;
+                    }
+                    return callback(playerOneId);
+                  });
+                }
+              });
+            } else {
+              // Shouldn't ever do this, but I'm protecting my butt in case we do
+              return callback(null);
+            }
+          });
+        } else {
+          return callback(null);
+        }
+      }
+    });
   },
 
-  checkDraw: function (player) {
-    return games[players[player.id].currentGame].moves >= 42;
+  rejectGame: function (playerId, callback) {
+    removeChallenge(playerId, function(error, opponentId) {
+      if (error) {
+        throw error;
+      } else if (opponentId) {
+        return callback(opponentId);
+      } else {
+        return callback(null);
+      }
+    });
   },
 
-  swapPlayer: function (player) {
-    games[players[player.id].currentGame].currentTurn *= -1;
+  printBoard: function (playerId, callback) {
+    getGameFromPlayerId(playerId, function(error, game) {
+      if (error) {
+        throw error;
+      } else if (game) {
+        return callback(parseBoard(game.player1, game.player2, JSON.parse(game.board)));
+      } else {
+        return callback(null);
+      }
+    });
   },
 
-  removeGame: function (player) {
-    var opponent = players[player.id].challenge.opponent;
-    delete games[players[player.id].currentGame];
-    delete players[player.id].currentGame;
-    delete players[player.id].challenge;
-    delete players[opponent].currentGame;
-    delete players[opponent].challenge;
+  placeToken: function (playerId, column, callback) {
+    getGameFromPlayerId(playerId, function(error, game) {
+      if (error) {
+        throw error;
+      } else if (game) {
+        if ((game.player1 === playerId && game.currentTurn === 1) || (game.player2 === playerId && game.currentTurn === -1)) {
+          var board = JSON.parse(game.board);
+          var row = -1;
+          for (i = 5; i >= 0; i--) {
+            if (board[i][column] === 0) {
+              row = i;
+              break;
+            }
+          }
+          if (row !== -1) {
+            board[row][column] = game.currentTurn;
+            game.board = JSON.stringify(board);
+            game.currentTurn *= -1;
+            game.turnCount++;
+            var opponentId = game.player1 === playerId ? game.player2 : game.player1;
+            updateGame(game, function(error, results) {
+              if (error) {
+                throw error;
+              }
+              if (isVictory(board, game.currentTurn * -1, row, column)) {
+                // Victory fanfare
+                removeGame(game.id, game.player1, game.player2, function(error, results) {
+                  if (error) {
+                    throw error;
+                  }
+                  addWin(playerId, function(error, result) {
+                    if (error) throw error;
+                  });
+                  addLoss(opponentId, function(error, result) {
+                    if (error) throw error;
+                  });
+                  return callback('victory', parseBoard(game.player1, game.player2, board));
+                });
+              } else if (game.turnCount >= 42) {
+                // Alright, we'll cal it a draw
+                removeGame(game.id, game.player1, game.player2, function(error, results) {
+                  if (error) {
+                    throw error;
+                  }
+                  addTie(game.player1, game.player2, function(error, result) {
+                    if (error) throw error;
+                  });
+                  return callback('draw', parseBoard(game.player1, game.player2, board));
+                });
+              } else {
+                return callback(opponentId, parseBoard(game.player1, game.player2, board));
+              }
+            });
+          } else {
+            return callback(null);
+          }
+        }
+      } else {
+        return callback(null);
+      }
+    });
   }
 }
 
-function isChallengeable(playerId) {
-  return !players[playerId].challenge;
+function parseBoard(playerOneId, playerTwoId, board) {
+  var message = core.mention(playerOneId) + " " + PLAYER_ONE + " vs " + core.mention(playerTwoId) + " " + PLAYER_TWO;
+  board.forEach(row => {
+    message = message.concat("\n");
+    row.forEach(space => {
+      if (space === 0) {
+        message = message.concat(EMPTY);
+      } else if (space === 1) {
+        message = message.concat(PLAYER_ONE);
+      } else {
+        message = message.concat(PLAYER_TWO);
+      }
+    });
+  });
+  message = message.concat("\n:one::two::three::four::five::six::seven:");
+  return message;
 }
 
-function newBoard() {
-  return [
+function canChallenge(playerOneId, playerTwoId, callback) {
+  var sql = 'SELECT * FROM c4challenges WHERE challenger = ? OR challenged = ? OR challenger = ? OR challenged = ?';
+  var values = [playerOneId, playerOneId, playerTwoId, playerTwoId];
+  connection.query(sql, values, function(error, results) {
+    if (error) {
+      return callback(error, null);
+    }
+    callback(null, results.length === 0);
+  });
+}
+
+function createChallenge(playerOneId, playerTwoId, callback) {
+  var sql = 'INSERT INTO c4challenges SET ?';
+  var values = {challenger: playerOneId, challenged: playerTwoId};
+  connection.query(sql, values, function(error, results) {
+    if (error) {
+      return callback(error, null);
+    }
+    callback(null, results.insertId);
+  });
+}
+
+function setChallenge(playerOneId, playerTwoId, challengeId, callback) {
+  var sql = 'INSERT INTO c4users (id, wins, losses, ties, challengeId) VALUES ? ON DUPLICATE KEY UPDATE challengeId = ?';
+  var values = [[[playerOneId, 0, 0, 0, challengeId], [playerTwoId, 0, 0, 0, challengeId]], challengeId];
+  connection.query(sql, values, function(error, results) {
+    if (error) {
+      return callback(error, null);
+    }
+    callback(null, true);
+  });
+}
+
+function getChallenge(playerId, callback) {
+  var sql = 'SELECT challengeId FROM c4users WHERE id = ?';
+  var values = [playerId];
+  connection.query(sql, values, function(error, results) {
+    if (error) {
+      return callback(error, null);
+    } else {
+      sql = 'SELECT * from c4challenges WHERE id = ?';
+      values = [results[0].challengeId];
+      connection.query(sql, values, function(error, results) {
+        if (error) {
+          return callback(error, null);
+        } else {
+          return callback(null, results[0]);
+        }
+      });
+    }
+  });
+}
+
+function removeChallenge(playerId, callback) {
+  getChallenge(playerId, function(error, challenge) {
+    if (error) {
+      return callback(error, null);
+    }
+    if (challenge) {
+      var sql = 'DELETE FROM c4challenges WHERE id = ?';
+      var values = [challenge.id];
+      connection.query(sql, values, function(error, results) {
+        if (error) {
+          return callback(error, null);
+        } else {
+          sql = 'UPDATE c4users SET challengeId = ? WHERE challengeId = ?';
+          values = [null, challenge.id];
+          connection.query(sql, values, function(error, results) {
+            if (error) {
+              return callback(error, null);
+            } else {
+              return callback(null, challenge.challenger === playerId ? challenge.challenged : challenge.challenger);
+            }
+          });
+        } 
+      });
+    } else {
+      return callback(null, null);
+    }  
+  });
+}
+
+function createGame(playerOneId, playerTwoId, callback) {
+  var newBoard = JSON.stringify([
     [0,0,0,0,0,0,0],
     [0,0,0,0,0,0,0],
     [0,0,0,0,0,0,0],
     [0,0,0,0,0,0,0],
     [0,0,0,0,0,0,0],
     [0,0,0,0,0,0,0]
-  ]
+  ]);
+  var sql = 'INSERT INTO c4games (player1, player2, currentTurn, board, turnCount) VALUES (?, ?, ?, ?, ?)';
+  var values = [playerOneId, playerTwoId, 1, newBoard, 0];
+
+  connection.query(sql, values, function(error, results) {
+    if (error) {
+      return callback(error, null);
+    }
+    callback(null, results.insertId);
+  });
 }
 
-function playerHasGame(playerId) {
-  return (players[playerId] && players[playerId].currentGame);
+function setGame(playerOneId, playerTwoId, gameId, callback) {
+  var sql = 'UPDATE c4users SET gameId = ? WHERE id = ? OR id = ?';
+  var values = [gameId, playerOneId, playerTwoId];
+
+  connection.query(sql, values, function(error, results) {
+    if (error) {
+      return callback(error, null);
+    }
+    callback(null, results.changedRows);
+  });
 }
 
-function isPlayerTurn(playerId) {
-  var game = playerHasGame(playerId) ? games[players[playerId].currentGame] : null;
-  if (game && ((game.playerOne === playerId && game.currentTurn === 1) 
-      || (game.playerTwo === playerId && game.currentTurn === -1))) {
+function getGame(gameId, callback) {
+  var sql = 'SELECT * FROM c4games WHERE id = ?';
+  var values = [gameId];
+
+  connection.query(sql, values, function(error, results) {
+    if (error) {
+      return callback(error, null);
+    }
+    callback(null, results[0]);
+  });
+}
+
+function getGameFromPlayerId(playerId, callback) {
+  getGameId(playerId, function (error, gameId) {
+    if (error) {
+      return callback(error, null);
+    } else if (gameId) {
+      getGame(gameId, function(error, game) {
+        if (error) {
+          return callback(error, null);
+        } else {
+          return callback(null, game);
+        }
+      });
+    } else {
+      return callback(null, null);
+    }
+  });
+}
+
+function updateGame(game, callback) {
+  var sql = 'UPDATE c4games SET currentTurn = ?, board = ?, turnCount = ? WHERE id = ?';
+  var values = [game.currentTurn, game.board, game.turnCount, game.id];
+
+  connection.query(sql, values, function(error, results) {
+    if (error) {
+      return callback(error, null);
+    }
+    callback(null, results);
+  });
+}
+
+function getGameId(playerId, callback) {
+  var sql = 'SELECT gameId FROM c4users WHERE id = ?';
+  var values = [playerId];
+
+  connection.query(sql, values, function(error, results) {
+    if (error) {
+      return callback(error, null);
+    }
+    callback(null, results[0].gameId);
+  });
+}
+
+function removeGame(gameId, playerOneId, playerTwoId, callback) {
+  // Should I actually delete the games? Might be useful to pull old games for some raisin
+  var sql = 'UPDATE c4users SET gameId = ? WHERE id = ? OR id = ?';
+  var values = [null, playerOneId, playerTwoId];
+
+  connection.query(sql, values, function(error, results) {
+    if (error) {
+      return callback(error, null);
+    }
+    callback(null, results);
+  });
+}
+
+function addWin(playerId, callback) {
+  var sql = 'UPDATE c4users SET wins = wins + 1 WHERE id = ?';
+  var values = [playerId];
+
+  connection.query(sql, values, function(error, results) {
+    if (error) {
+      return callback(error, null);
+    }
+    callback(null, results);
+  });
+}
+
+function addLoss(playerId, callback) {
+  var sql = 'UPDATE c4users SET losses = losses + 1 WHERE id = ?';
+  var values = [playerId];
+
+  connection.query(sql, values, function(error, results) {
+    if (error) {
+      return callback(error, null);
+    }
+    callback(null, results);
+  });
+}
+
+function addTie(palyerOne, playerTwoId, callback) {
+  var sql = 'UPDATE c4users SET ties = ties + 1 WHERE id = ? OR id = ?';
+  var values = [playerOneId, playerTwoId];
+
+  connection.query(sql, values, function(error, results) {
+    if (error) {
+      return callback(error, null);
+    }
+    callback(null, results);
+  });
+}
+
+function isVictory(board, currentTurn, row, column) {
+  if (checkHorizontalVictory(board, currentTurn, row, column) || 
+      checkVerticalVictory(board, row, column) ||
+      checkForwardDiagonalVictory(board, currentTurn, row, column) || 
+      checkBackwardDiagonalVictory(board, currentTurn, row, column)) {
     return true;
   }
 
@@ -168,11 +426,10 @@ function isPlayerTurn(playerId) {
 
 // TODO: Merge some of these checkVictory functions together
 // -
-function checkHorizontalVictory(gameId, row, column) {
-  var game = games[gameId];
-  var score = game.currentTurn;
-  score += tallyHorizontalLeft(game.board, game.currentTurn, row, column) 
-        + tallyHorizontalRight(game.board, game.currentTurn, row, column);
+function checkHorizontalVictory(board, currentTurn, row, column) {
+  var score = currentTurn;
+  score += tallyHorizontalLeft(board, currentTurn, row, column) 
+        + tallyHorizontalRight(board, currentTurn, row, column);
   if (Math.abs(score) >= 4) {
     console.log("Victory: Horizontal");
     return true;
@@ -198,11 +455,10 @@ function tallyHorizontalRight(board, currentTurn, row, column) {
 }
 
 // |
-function checkVerticalVictory(gameId, row, column) {
+function checkVerticalVictory(board, row, column) {
   // Only need to check below this spot, since there are no tokens above it
-  var game = games[gameId];
-  if (row < 3 && Math.abs(game.board[row][column] + game.board[row + 1][column] +
-                          game.board[row + 2][column] + game.board[row + 3][column]) === 4) {
+  if (row < 3 && Math.abs(board[row][column] + board[row + 1][column] +
+                          board[row + 2][column] + board[row + 3][column]) === 4) {
     console.log("Victory: Vertical");
     return true;
   }
@@ -211,11 +467,10 @@ function checkVerticalVictory(gameId, row, column) {
 }
 
 // /
-function checkForwardDiagonalVictory(gameId, row, column) {
-  var game = games[gameId];
-  var score = game.currentTurn;
-  score += tallyForwardDiagonalLeft(game.board, game.currentTurn, row, column) 
-        + tallyForwardDiagonalRight(game.board, game.currentTurn, row, column);
+function checkForwardDiagonalVictory(board, currentTurn, row, column) {
+  var score = currentTurn;
+  score += tallyForwardDiagonalLeft(board, currentTurn, row, column) 
+        + tallyForwardDiagonalRight(board, currentTurn, row, column);
 
   if (Math.abs(score) >= 4) {
     console.log("Victory: Forward Diagonal");
@@ -242,11 +497,10 @@ function tallyForwardDiagonalRight(board, currentTurn, row, column) {
 }
 
 // \
-function checkBackwardDiagonalVictory(gameId, row, column) {
-  var game = games[gameId];
-  var score = game.currentTurn;
-  score += tallyBackwardDiagonalLeft(game.board, game.currentTurn, row, column) 
-        + tallyBackwardDiagonalRight(game.board, game.currentTurn, row, column);
+function checkBackwardDiagonalVictory(board, currentTurn, row, column) {
+  var score = currentTurn;
+  score += tallyBackwardDiagonalLeft(board, currentTurn, row, column) 
+        + tallyBackwardDiagonalRight(board, currentTurn, row, column);
 
   if (Math.abs(score) >= 4) {
     console.log("Victory: Backward Diagonal");
@@ -270,11 +524,4 @@ function tallyBackwardDiagonalRight(board, currentTurn, row, column) {
   }
 
   return 0;
-}
-
-function mention(user) {
-  if (typeof user === "string") {
-    return "<@" + user + ">";
-  }
-  return "<@" + user.id + ">";
 }

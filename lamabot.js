@@ -7,6 +7,7 @@
 // Import the discord.js module and other modules
 const Discord = require('discord.js');
 const c4 = require('./c4.js');
+const core = require('./core.js');
 
 // Create an intance of a Discord Client, and call it bot
 const bot = new Discord.Client();
@@ -47,48 +48,61 @@ bot.on('message', message => {
       } else if (match[2] === 'c4') {
         if (params[0] === 'accept') {
           // Accept a challenge and start a new game
-          var player = c4.acceptGame(author);
-          if (player !== null) {
-            var message = [
-              mention(author) + " has accept the challenge!",
-              mention(player) + " has the first turn.",
-              c4.printBoard(author)
-            ]
-            sendMessage(channel, message);
-          } else {
-            sendMessage(channel, "I'm sorry " + mention(author) + ", but it looks like you have no challenges.");
-          }
+          c4.acceptGame(author.id, function(playerOne) {
+            if (playerOne) {
+              c4.printBoard(author.id, function(board) {
+                var message = [
+                  core.mention(author) + " has accepted the challenge!",
+                  core.mention(playerOne) + " has the first turn.",
+                  board
+                ];
+                sendMessage(channel, message);
+              });
+            } else {
+              sendMessage(channel, "I'm sorry " + core.mention(author) + ", but it looks like you have no challenges.");
+            }
+          });
         } else if (params[0] === 'board') {
           // Display the board the user is currently playing
-          var board = c4.printBoard(author);
-          if (board) {
-            sendMessage(channel, board);
-          }
+          c4.printBoard(author.id, function(board) {
+            if (board) {
+              sendMessage(channel, board);
+            } else {
+              sendMessage(channel, core.mention(author) + ", you have no game.");
+            }
+          });
         } else if (params[0] === 'challenge') {
           // Challenge another user to connect 4
           if (mentions.length > 0) {
             if (mentions.length === 1) {
               if (mentions[0] != author) {
-                if (c4.challenge(author, mentions[0])) {
-                  sendMessage(channel, mention(mentions[0]) + ", you have been challenged by "
-                              + mention(author) + ". Type ``!lbc4 accept`` to accept this challenge,"
-                              + " or ``!lbc4 reject`` to reject it.");
+                if (mentions[0] != bot.user) {
+                  c4.challenge(author.id, mentions[0].id, function(result) {
+                    if (result) {
+                      sendMessage(channel, core.mention(mentions[0]) + ", you have been challenged by "
+                                + core.mention(author) + ". Type ``!lbc4 accept`` to accept this challenge,"
+                                + " or ``!lbc4 reject`` to reject it.");
+                    } else {
+                      // At least one of the players is currently in a game, though I suppose something
+                      // else could be wrong
+                      sendMessage(channel, "I'm sorry, neither player can have an active game or challenge.");
+                    }
+                  });
                 } else {
-                  // At least one of the players is currently in a game, though I suppose something
-                  // else could be wrong
-                  sendMessage(channel, "I'm sorry, neither player can have an active game or challenge.");
+                  // Player tried to challenge the bot
+                  sendMessage(channel, core.mention(author) + ", you can't challenge me.");
                 }
               } else {
                 // Player tried to challenge himself/herself
-                sendMessage(channel, mention(author) + ", you can't challenge yourself you goof.");
+                sendMessage(channel, core.mention(author) + ", you can't challenge yourself you goof.");
               }
             } else {
               // Player tried to challenge 2 or more other players
-              sendMessage(channel, mention(author) + ", challenge only one person, please.");
+              sendMessage(channel, core.mention(author) + ", challenge only one person, please.");
             }
           } else {
             // Player didn't mention anyone in their challenge
-            sendMessage(channel, mention(author) + ", you gotta challenge someone you dingus (use an @mention).");
+            sendMessage(channel, core.mention(author) + ", you gotta challenge someone you dingus (use an @mention).");
           }
         } else if (params[0] === 'drop') {
           // Drop a token in the specified column
@@ -98,39 +112,39 @@ bot.on('message', message => {
           } else {
             var column = parseInt(params[1] - 1)
             if (column != NaN && column >= 0 && column < 7) {
-              var row = c4.placeToken(author, column);
-              if (row === null) {
-                // Specified column is filled, or perhaps something else went wrong
-                sendMessage(channel, "Invalid placement. Column is probably filled.");
-              } else {
-                var message = [];
-                message.push(c4.printBoard(author));
-                if (c4.checkVictory(author, row, column)) {
-                  // The player won! Good for him/her
-                  message.push(mention(author) + " wins!");
-                  c4.removeGame(author);
-                } else if (c4.checkDraw(author)) {
-                  // All spots have been filled up and nobody won, which is ridiculous
-                  message.push("Alright, we'll call it a draw.");
-                  c4.removeGame(author);
+              c4.placeToken(author.id, column, function(result, board) {
+                if (result) {
+                  var message = [];
+                  message.push(board);
+                  if (result === 'victory') {
+                    // The player won! Good for him/her
+
+                    message.push(core.mention(author) + " wins!");
+                  } else if (result === 'draw') {
+                    // It's a draw
+                    message.push("Alright, we'll call it a draw.");
+                  } else {
+                    // Game is still going
+                    message.push(core.mention(result) + "'s turn.");
+                  }
+                  sendMessage(channel, message);
                 } else {
-                  // No one won, and spots are still open to play, so just swap the active player
-                  c4.swapPlayer(author);
+                  sendMessage(channel, core.mention(author) + ", it's not your turn, or you specified a bad column.");
                 }
-                sendMessage(channel, message);
-              } 
+              });
             } else {
               // The column specified is invalid, perhaps a number outside the range, perhaps NaN
               sendMessage(channel, "Please specify a column number between 1 and 7 while it is your turn.");
             } 
           }
         } else if (params[0] === 'reject') {
-          var opponent = c4.rejectGame(author);
-          if (opponent) {
-            sendMessage(channel, mention(opponent) + ", " + mention(author) + " has rejected your challenge.");
-          } else {
-            sendMessage(channel, mention(author) + ", you have no challenge to reject.");
-          }
+          c4.rejectGame(author.id, function(opponent) {
+            if (opponent) {
+              sendMessage(channel, "The challenge between " + core.mention(author) + " and " + core.mention(opponent) + " has been rescinded.");
+            } else {
+              sendMessage(channel, core.mention(author) + ", you have no challenge to reject.");
+            }
+          });          
         }
 
       // TODO: Remove these commands
@@ -156,7 +170,7 @@ bot.on('message', message => {
       }
     });
     sendMessage(channel, "I'm dying... *death gurgle*... Oh hey I was given another chance. Anyways, "
-                + mention(admin) + ", `" + error.name + "` happened. :(");
+                + core.mention(admin) + ", `" + error.name + "` happened. :(");
   }
 });
 
@@ -170,13 +184,6 @@ function sendMessage(channel, content, options) {
           ? console.log(`Sent embedded message regarding ${message.embeds[0].title}`)
           : console.log(`Sent message: ${message.content}`));
     //.catch(console.error);
-}
-
-function mention(user) {
-  if (typeof user === 'string') {
-    return "<@" + user + ">";
-  }
-  return "<@" + user.id + ">";
 }
 
 function displayHelpEmbed(channel, helpTopic) {
@@ -205,7 +212,7 @@ function displayHelpEmbed(channel, helpTopic) {
       },
       {
         name: "reject",
-        value: "Reject a challenge. Useful if you don't want to play with that scrub."
+        value: "Reject or rescind a challenge. Useful if you don't want to play with that scrub."
       }]
     } else {
       embed.title = "Help topic not found";

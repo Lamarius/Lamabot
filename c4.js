@@ -2,7 +2,7 @@
   Connect 4 module for Lamabot
  */
 
-const core = require('./core');
+const core = require('./core.js');
 
 const EMPTY = ':white_circle:';
 const PLAYER_ONE = ':red_circle:';

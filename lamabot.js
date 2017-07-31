@@ -8,12 +8,13 @@
 const Discord = require('discord.js');
 const c4 = require('./c4.js');
 const core = require('./core.js');
+const connectionInfo = require('./connectionInfo.js');
 
 // Create an intance of a Discord Client, and call it bot
 const bot = new Discord.Client();
 
 // The token of your bot - https://discordapp.com/developers/applications/me
-const token = 'MzA1MTI2NTA2OTYxODI5ODg4.C9wqyw.gIj968LkCCqVsZdbpvbf-qngz3s';
+const token = connectionInfo.token;
 
 // The id of the bot admin
 const admin = '177970052610392064';
@@ -22,7 +23,6 @@ const admin = '177970052610392064';
 const logFile = './logs/log.txt';
 
 // Database connection
-const connectionInfo = require('./connectionInfo.js');
 var connection = connectionInfo.connection();
 
 // The ready event is vital, it means that your bot will only start reacting to information
@@ -44,7 +44,7 @@ bot.on('message', message => {
   var author = message.author;
 
   try {
-    if (match && match.length > 2) {
+    if (canSendMessages(channel) && match && match.length > 2) {
       var params = match[3].split(' ');
       // Help commands
       if (match[2] === 'help') {
@@ -180,6 +180,23 @@ bot.on('message', message => {
   }
 });
 
+function canSendMessages(channel) {
+  permissionOverwrites = channel.permissionOverwrites;
+  // Check if channel specifically allows/denies the bot to send messages
+  if (permissionOverwrites[bot.user.id]) {
+    var allows = new Discord.Permissions(permissionOverwrites[bot.user.id].allow);
+    var denies = new Discord.Permissions(permissionOverwrites[bot.user.id].deny);
+    if (allows.has('SEND_MESSAGES')) return true;
+    if (denies.has('SEND_MESSAGES')) return false;
+  }
+  // Check if channel allows/denies any of the bot's roles to send messages
+
+  // Check if the bot has a role that allows/denies it to send messages in general
+
+  // Wow, nothing? For real? Well, I think that means it can't send messages
+  return false;
+}
+
 function sendMessage(channel, content, options) {
   if (!content && !options) {
     console.log('Ignoring empty message.');
@@ -189,7 +206,6 @@ function sendMessage(channel, content, options) {
     .then(message => message.embeds.length > 0
           ? console.log(`Sent embedded message regarding ${message.embeds[0].title}`)
           : console.log(`Sent message: ${message.content}`));
-    //.catch(console.error);
 }
 
 function displayHelpEmbed(channel, helpTopic) {

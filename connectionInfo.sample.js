@@ -4,6 +4,7 @@
 const mysql = require('mysql');
 
 module.exports = {
+  token: 'bot-token',
   connection: function () {
     var db_config = {
       host: 'host',

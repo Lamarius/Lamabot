@@ -3,38 +3,30 @@
  */
 
 const core = require('./core.js');
+const connectionInfo = require('./connectionInfo.js');
 
 const EMPTY = ':white_circle:';
 const PLAYER_ONE = ':red_circle:';
 const PLAYER_TWO = ':large_blue_circle:';
 
-var mysql = require('mysql');
-var connectionInfo = require('./connectionInfo.js')
-var connection = mysql.createConnection({
-  host: connectionInfo.host,
-  user: connectionInfo.user,
-  password: connectionInfo.password,
-  database: connectionInfo.database,
-  supportBigNumbers: true
-});
+var connection = connectionInfo.connection();
 
 module.exports = {
   challenge: function (playerOneId, playerTwoId, callback) {
-    canChallenge(playerOneId, playerTwoId, function(error, result) {
+    canChallenge(playerOneId, playerTwoId, function(error, isChallengeable) {
       if (error) {
         throw error;
       } else {
-        if (result === true) {
-          createChallenge(playerOneId, playerTwoId, function(error, result) {
+        if (isChallengeable) {
+          createGame(playerOneId, playerTwoId, function(error, gameId) {
             if (error) {
               throw error;
             } else {
-              var challengeId = result;
-              setChallenge(playerOneId, playerTwoId, challengeId, function(error, result) {
+              setGame(playerOneId, playerTwoId, gameId, function(error, results) {
                 if (error) {
                   throw error;
                 } else {
-                  return callback(result);
+                  return callback(true);
                 }
               })
             }
@@ -46,68 +38,52 @@ module.exports = {
     });
   },
 
-  acceptGame: function (playerId, callback) {
-    getChallenge(playerId, function(error, challenge) {
+  acceptChallenge: function (playerId, callback) {
+    getGameFromPlayerId(playerId, function(error, game) {
       if (error) {
-        throw error
-      } else {
-        if (challenge) {
-          // Create a new game, set player challenges to null and set game to new game
-          var playerOneId;
-          var playerTwoId;
-          if (Math.round(Math.random())) {
-            playerOneId = challenge.challenger;
-            playerTwoId = challenge.challenged;
-          } else {
-            playerOneId = challenge.challenged;
-            playerTwoId = challenge.challenger;
-          }
-          createGame(playerOneId, playerTwoId, function(error, gameId) {
+        throw error;
+      } else if (game) {
+        if ((game.challenger === 1 && game.playerTwoId === playerId) || (game.challenger === 2 && game.playerOneId === playerId)) {
+          acceptGame(game.id, function(error, results) {
             if (error) {
               throw error;
-            } else if (gameId) {
-              setGame(playerOneId, playerTwoId, gameId, function(error, results) {
-                if (error) {
-                  throw error;
-                } else {
-                  removeChallenge(playerId, function(error) {
-                    if (error) {
-                      throw error;
-                    }
-                    return callback(playerOneId);
-                  });
-                }
-              });
             } else {
-              // Shouldn't ever do this, but I'm protecting my butt in case we do
-              return callback(null);
+              return callback(game.playerOneId, parseBoard(game.playerOneId, game.playerTwoId, JSON.parse(game.board)));
             }
           });
         } else {
-          return callback(null);
+          return callback(playerId === game.playerOneId ? game.playerTwoId : game.playerOneId, null);
         }
-      }
-    });
-  },
-
-  rejectGame: function (playerId, callback) {
-    removeChallenge(playerId, function(error, opponentId) {
-      if (error) {
-        throw error;
-      } else if (opponentId) {
-        return callback(opponentId);
       } else {
         return callback(null);
       }
     });
   },
 
-  printBoard: function (playerId, callback) {
+  rejectChallenge: function (playerId, callback) {
     getGameFromPlayerId(playerId, function(error, game) {
       if (error) {
         throw error;
       } else if (game) {
-        return callback(parseBoard(game.player1, game.player2, JSON.parse(game.board)));
+        removeGame(game.id, game.playerOneId, game.playerTwoId, function(error, results) {
+          if (error) {
+            throw error;
+          } else {
+            return callback(playerId === game.playerOneId ? game.playerTwoId : game.playerOneId);
+          }
+        });
+      } else {
+        return callback(null);
+      }
+    });
+  },
+
+  printboard: function (playerId, callback) {
+    getGameFromPlayerId(playerId, function(error, game) {
+      if (error) {
+        throw error;
+      } else if (game) {
+        return callback(parseBoard(game.playerOneId, game.playerTwoId, JSON.parse(game.board)));
       } else {
         return callback(null);
       }
@@ -119,7 +95,7 @@ module.exports = {
       if (error) {
         throw error;
       } else if (game) {
-        if ((game.player1 === playerId && game.currentTurn === 1) || (game.player2 === playerId && game.currentTurn === -1)) {
+        if ((game.playerOneId === playerId && game.currentTurn === 1) || (game.playerTwoId === playerId && game.currentTurn === -1)) {
           var board = JSON.parse(game.board);
           var row = -1;
           for (i = 5; i >= 0; i--) {
@@ -128,19 +104,20 @@ module.exports = {
               break;
             }
           }
+
           if (row !== -1) {
             board[row][column] = game.currentTurn;
             game.board = JSON.stringify(board);
             game.currentTurn *= -1;
             game.turnCount++;
-            var opponentId = game.player1 === playerId ? game.player2 : game.player1;
+            var opponentId = game.playerOneId === playerId ? game.playerTwoId : game.playerOneId;
             updateGame(game, function(error, results) {
               if (error) {
                 throw error;
               }
               if (isVictory(board, game.currentTurn * -1, row, column)) {
                 // Victory fanfare
-                removeGame(game.id, game.player1, game.player2, function(error, results) {
+                removeGame(game.id, game.playerOneId, game.playerTwoId, function(error, results) {
                   if (error) {
                     throw error;
                   }
@@ -150,21 +127,28 @@ module.exports = {
                   addLoss(opponentId, function(error, result) {
                     if (error) throw error;
                   });
-                  return callback('victory', parseBoard(game.player1, game.player2, board));
+                  return callback('victory', parseBoard(game.playerOneId, game.playerTwoId, board));
                 });
               } else if (game.turnCount >= 42) {
                 // Alright, we'll cal it a draw
-                removeGame(game.id, game.player1, game.player2, function(error, results) {
+                removeGame(game.id, game.playerOneId, game.playerTwoId, function(error, results) {
                   if (error) {
                     throw error;
                   }
-                  addTie(game.player1, game.player2, function(error, result) {
-                    if (error) throw error;
+                  addTie(game.playerOneId, function(error, result) {
+                    if (error) {
+                      throw error;
+                    }
                   });
-                  return callback('draw', parseBoard(game.player1, game.player2, board));
+                  addTie(game.playerTwoId, function(error, result) {
+                    if (error) {
+                      throw error;
+                    }
+                  });
+                  return callback('draw', parseBoard(game.playerOneId, game.playerTwoId, board));
                 });
               } else {
-                return callback(opponentId, parseBoard(game.player1, game.player2, board));
+                return callback(opponentId, parseBoard(game.playerOneId, game.playerTwoId, board));
               }
             });
           } else {
@@ -197,84 +181,14 @@ function parseBoard(playerOneId, playerTwoId, board) {
 }
 
 function canChallenge(playerOneId, playerTwoId, callback) {
-  var sql = 'SELECT * FROM c4challenges WHERE challenger = ? OR challenged = ? OR challenger = ? OR challenged = ?';
-  var values = [playerOneId, playerOneId, playerTwoId, playerTwoId];
-  connection.query(sql, values, function(error, results) {
-    if (error) {
-      return callback(error, null);
-    }
-    callback(null, results.length === 0);
-  });
-}
-
-function createChallenge(playerOneId, playerTwoId, callback) {
-  var sql = 'INSERT INTO c4challenges SET ?';
-  var values = {challenger: playerOneId, challenged: playerTwoId};
-  connection.query(sql, values, function(error, results) {
-    if (error) {
-      return callback(error, null);
-    }
-    callback(null, results.insertId);
-  });
-}
-
-function setChallenge(playerOneId, playerTwoId, challengeId, callback) {
-  var sql = 'INSERT INTO c4users (id, wins, losses, ties, challengeId) VALUES ? ON DUPLICATE KEY UPDATE challengeId = ?';
-  var values = [[[playerOneId, 0, 0, 0, challengeId], [playerTwoId, 0, 0, 0, challengeId]], challengeId];
-  connection.query(sql, values, function(error, results) {
-    if (error) {
-      return callback(error, null);
-    }
-    callback(null, true);
-  });
-}
-
-function getChallenge(playerId, callback) {
-  var sql = 'SELECT challengeId FROM c4users WHERE id = ?';
-  var values = [playerId];
+  var sql = 'SELECT id FROM users WHERE (id = ? OR id = ?) AND c4gameId IS NOT NULL';
+  var values = [playerOneId, playerTwoId];
   connection.query(sql, values, function(error, results) {
     if (error) {
       return callback(error, null);
     } else {
-      sql = 'SELECT * from c4challenges WHERE id = ?';
-      values = [results[0].challengeId];
-      connection.query(sql, values, function(error, results) {
-        if (error) {
-          return callback(error, null);
-        } else {
-          return callback(null, results[0]);
-        }
-      });
+      return callback(null, results.length === 0);
     }
-  });
-}
-
-function removeChallenge(playerId, callback) {
-  getChallenge(playerId, function(error, challenge) {
-    if (error) {
-      return callback(error, null);
-    }
-    if (challenge) {
-      var sql = 'DELETE FROM c4challenges WHERE id = ?';
-      var values = [challenge.id];
-      connection.query(sql, values, function(error, results) {
-        if (error) {
-          return callback(error, null);
-        } else {
-          sql = 'UPDATE c4users SET challengeId = ? WHERE challengeId = ?';
-          values = [null, challenge.id];
-          connection.query(sql, values, function(error, results) {
-            if (error) {
-              return callback(error, null);
-            } else {
-              return callback(null, challenge.challenger === playerId ? challenge.challenged : challenge.challenger);
-            }
-          });
-        } 
-      });
-    } else {
-      return callback(null, null);
-    }  
   });
 }
 
@@ -287,8 +201,9 @@ function createGame(playerOneId, playerTwoId, callback) {
     [0,0,0,0,0,0,0],
     [0,0,0,0,0,0,0]
   ]);
-  var sql = 'INSERT INTO c4games (player1, player2, currentTurn, board, turnCount) VALUES (?, ?, ?, ?, ?)';
-  var values = [playerOneId, playerTwoId, 1, newBoard, 0];
+  var sql = 'INSERT INTO c4games (playerOneId, playerTwoId, challenger, currentTurn, board, turnCount) VALUES (?, ?, ?, ?, ?, ?)';
+  var values = Math.round(Math.random()) ? [playerOneId, playerTwoId, 1, 1, newBoard, 0]
+                                         : [playerTwoId, playerOneId, 2, 1, newBoard, 0];
 
   connection.query(sql, values, function(error, results) {
     if (error) {
@@ -299,14 +214,28 @@ function createGame(playerOneId, playerTwoId, callback) {
 }
 
 function setGame(playerOneId, playerTwoId, gameId, callback) {
-  var sql = 'UPDATE c4users SET gameId = ? WHERE id = ? OR id = ?';
-  var values = [gameId, playerOneId, playerTwoId];
+  var sql = 'INSERT INTO users (id, c4gameId) VALUES ? ON DUPLICATE KEY UPDATE c4gameId = ?';
+  var values = [[[playerOneId, gameId], [playerTwoId, gameId]], gameId];
 
   connection.query(sql, values, function(error, results) {
     if (error) {
       return callback(error, null);
+    } else {
+      return callback(null, results);
     }
-    callback(null, results.changedRows);
+  });
+}
+
+function acceptGame(gameId, callback) {
+  var sql = 'UPDATE c4games SET challenger = ? WHERE id = ?';
+  var values = [0, gameId];
+
+  connection.query(sql, values, function(error, results) {
+    if (error) {
+      return callback(error, null);
+    } else {
+      return callback(null, results);
+    }
   });
 }
 
@@ -353,63 +282,122 @@ function updateGame(game, callback) {
 }
 
 function getGameId(playerId, callback) {
-  var sql = 'SELECT gameId FROM c4users WHERE id = ?';
+  var sql = 'SELECT c4gameId FROM users WHERE id = ?';
   var values = [playerId];
 
   connection.query(sql, values, function(error, results) {
     if (error) {
       return callback(error, null);
+    } else if (results.length > 0) {
+      return callback(null, results[0].c4gameId)
+    } else {
+      return callback(null, null);
     }
-    callback(null, results[0].gameId);
   });
 }
 
 function removeGame(gameId, playerOneId, playerTwoId, callback) {
   // Should I actually delete the games? Might be useful to pull old games for some raisin
-  var sql = 'UPDATE c4users SET gameId = ? WHERE id = ? OR id = ?';
+  var sql = 'UPDATE users SET c4gameId = ? WHERE id = ? OR id = ?';
   var values = [null, playerOneId, playerTwoId];
 
   connection.query(sql, values, function(error, results) {
     if (error) {
       return callback(error, null);
+    } else {
+      callback(null, results);
     }
-    callback(null, results);
+  });
+}
+
+function getStatsId(playerId, callback) {
+  var sql = 'SELECT c4statsId FROM users WHERE id = ?';
+  var values = [playerId];
+
+  connection.query(sql, values, function(error, results) {
+    if (error) {
+      return callback(error, null);
+    } else {
+      return callback(null, results[0].c4statsId);
+    }
+  });
+}
+
+function createStatsEntry(stats, callback) {
+  var sql = 'INSERT INTO C4Stats SET ?';
+
+  connection.query(sql, stats, function(error, results) {
+    if (error) {
+      return callback(error, null);
+    } else {
+      return callback(null, results.insertId);
+    }
+  })
+}
+
+function updateStatsEntry(stats, callback) {
+  getStatsId(stats.Playerid, function(error, statsId) {
+    if (error) {
+      return callback(error, null);
+    } else if (statsId) {
+      var sql = 'UPDATE C4Stats SET Wins = Wins + ?, Losses = Losses + ?, Ties = Ties + ? WHERE id = ?';
+      var values = [stats.Wins, stats.Losses, stats.Ties, stats.Playerid];
+
+      connection.query(sql, values, function(error, results) {
+        if (error) {
+          return callback(error, null);
+        } else {
+          return callback(null, results);
+        }
+      });
+    } else {
+      createStatsEntry(stats, function(error, statsId) {
+        if (error) {
+          return callback(error, null);
+        } else {
+          var sql = 'UPDATE users SET c4statsId = ? WHERE id = ?';
+          var values = [statsId, stats.playerid];
+
+          connection.query(sql, values, function(error, results) {
+            if (error) {
+              return callback(error, null);
+            } else {
+              return callback(null, results);
+            }
+          });
+        }
+      });
+    }
   });
 }
 
 function addWin(playerId, callback) {
-  var sql = 'UPDATE c4users SET wins = wins + 1 WHERE id = ?';
-  var values = [playerId];
-
-  connection.query(sql, values, function(error, results) {
+  updateStatsEntry({Playerid: playerId, Wins: 1, Losses: 0, Ties: 0}, function(error, results) {
     if (error) {
       return callback(error, null);
+    } else {
+      return callback(null, results);
     }
-    callback(null, results);
   });
 }
 
 function addLoss(playerId, callback) {
-  var sql = 'UPDATE c4users SET losses = losses + 1 WHERE id = ?';
-  var values = [playerId];
-
-  connection.query(sql, values, function(error, results) {
+  updateStatsEntry({Playerid: playerId, Wins: 0, Losses: 1, Ties: 0}, function(error, results) {
     if (error) {
       return callback(error, null);
+    } else {
+      return callback(null, results);
     }
-    callback(null, results);
   });
 }
 
-function addTie(palyerOne, playerTwoId, callback) {
-  var sql = 'UPDATE c4users SET ties = ties + 1 WHERE id = ? OR id = ?';
-  var values = [playerOneId, playerTwoId];
-
-  connection.query(sql, values, function(error, results) {
+function addTie(playerId, callback) {
+  updateStatsEntry({Playerid: playerId, Wins: 0, Losses: 0, Ties: 1}, function(error, results) {
     if (error) {
       return callback(error, null);
+    } else {
+      return callback(null, results);
     }
-    callback(null, results);
   });
 }
 

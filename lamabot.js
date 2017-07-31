@@ -21,11 +21,18 @@ const admin = '177970052610392064';
 // The location of where log files should go
 const logFile = './logs/log.txt';
 
+// Database connection
+const connectionInfo = require('./connectionInfo.js');
+var connection = connectionInfo.connection();
+
 // The ready event is vital, it means that your bot will only start reacting to information
-// from Discord _after_ ready is emitted.
+// from Discord _after_ ready is emitted
 bot.on('ready', () => {
   console.log('Lamabot reporting for duty!');
   bot.user.setGame('!lbhelp');
+
+  // Create/Update database tables
+  updateTables();
 });
 
 // Create an event listener for messages
@@ -48,16 +55,16 @@ bot.on('message', message => {
       } else if (match[2] === 'c4') {
         if (params[0] === 'accept') {
           // Accept a challenge and start a new game
-          c4.acceptGame(author.id, function(playerOne) {
-            if (playerOne) {
-              c4.printBoard(author.id, function(board) {
-                var message = [
-                  core.mention(author) + " has accepted the challenge!",
-                  core.mention(playerOne) + " has the first turn.",
-                  board
-                ];
-                sendMessage(channel, message);
-              });
+          c4.acceptChallenge(author.id, function(playerOne, board) {
+            if (board) {
+              var message = [
+                core.mention(author) + " has accepted the challenge!",
+                core.mention(playerOne) + " has the first turn.",
+                board
+              ];
+              sendMessage(channel, message);
+            } else if (playerOne) {
+              sendMessage(channel, "I'm sorry " + core.mention(author) + ", but " + core.mention(playerOne) + " has to be the one to accept your challenge.")
             } else {
               sendMessage(channel, "I'm sorry " + core.mention(author) + ", but it looks like you have no challenges.");
             }
@@ -137,7 +144,7 @@ bot.on('message', message => {
             } 
           }
         } else if (params[0] === 'reject') {
-          c4.rejectGame(author.id, function(opponent) {
+          c4.rejectChallenge(author.id, function(opponent) {
             if (opponent) {
               sendMessage(channel, "The challenge between " + core.mention(author) + " and " + core.mention(opponent) + " has been rescinded.");
             } else {
@@ -229,7 +236,29 @@ function displayHelpEmbed(channel, helpTopic) {
     }]
   }
   sendMessage(channel, {embed: embed});
-  //return embed
+}
+
+// TODO: Better error handling
+function updateTables() {
+  connection.query("CREATE TABLE IF NOT EXISTS users (id BIGINT(20) UNSIGNED NOT NULL PRIMARY KEY, " +
+                   "c4gameId INT, c4statsId INT)", function(error, results) {
+    if (error) {
+      throw error;
+    }
+  });
+  connection.query("CREATE TABLE IF NOT EXISTS c4games (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, " +
+                   "playerOneId BIGINT(20) UNSIGNED, playerTwoId BIGINT(20) UNSIGNED, challenger TINYINT(1), " + 
+                   "currentTurn TINYINT(1), board VARCHAR(139), turnCount TINYINT)", function(error, results) {
+    if (error) {
+      throw error;
+    }
+  });
+  connection.query("CREATE TABLE IF NOT EXISTS c4stats (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, " +
+                   "playerId BIGINT(20) UNSIGNED, wins INT, losses INT, ties INT)", function(error, results) {
+    if (error) {
+      throw error;
+    }
+  });
 }
 
 // log our bot in

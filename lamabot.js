@@ -181,18 +181,41 @@ bot.on('message', message => {
 });
 
 function canSendMessages(channel) {
-  permissionOverwrites = channel.permissionOverwrites;
+  var permissionOverwrites = channel.permissionOverwrites;
+  var guild = channel.guild;
+  var member = guild.member(bot.user.id);
+  var roles = member.roles;
   // Check if channel specifically allows/denies the bot to send messages
-  if (permissionOverwrites[bot.user.id]) {
-    var allows = new Discord.Permissions(permissionOverwrites[bot.user.id].allow);
-    var denies = new Discord.Permissions(permissionOverwrites[bot.user.id].deny);
+  var roleOverwrite = permissionOverwrites.get(bot.user.id);
+  if (roleOverwrite && roleOverwrite.type === 'member') {
+    var allows = new Discord.Permissions(roleOverwrite.allow);
+    var denies = new Discord.Permissions(roleOverwrite.deny);
     if (allows.has('SEND_MESSAGES')) return true;
     if (denies.has('SEND_MESSAGES')) return false;
   }
-  // Check if channel allows/denies any of the bot's roles to send messages
 
-  // Check if the bot has a role that allows/denies it to send messages in general
+  // Check the bot's roles and the channel's role-based overwrites to see if it allows the bot to send messages
+  if (roles) {
+    var canSendMessages = false;
+    var overwriteDenySendMessages = false;
+    roles.forEach(function (role) {
+      var roleOverwrite = permissionOverwrites.get(role.id);
+      if (roleOverwrite && roleOverwrite.type === 'role') {
+        var allows = new Discord.Permissions(roleOverwrite.allow);
+        var denies = new Discord.Permissions(roleOverwrite.deny);
+        // If an overwrite allows bot to send messages, then it can send messages regardless of 
+        // other role-based permissions
+        if (allows.has('SEND_MESSAGES')) return true;
+        // If an overwrite denies bot to send messages, then it cannot send messages unless another 
+        // role-based overwrite allows it to
+        if (denies.has('SEND_MESSAGES')) overwriteDenySendMessages = true;
+      } else {
+        if (role.hasPermission('SEND_MESSAGES')) canSendMessages = true;
+      }
+    });
 
+    return overwriteDenySendMessages ? false : canSendMessages;
+  }
   // Wow, nothing? For real? Well, I think that means it can't send messages
   return false;
 }
@@ -252,6 +275,14 @@ function displayHelpEmbed(channel, helpTopic) {
     }]
   }
   sendMessage(channel, {embed: embed});
+}
+
+function updateRoles(guildMember) {
+  sortedRoles[guildMember.guild.id] = Object.keys(guildMember.roles).sort(function (a, b) { 
+    console.log(a);
+    return guildMember.roles.get(a).position - guildMember.roles.get(b).position 
+  });
+  console.log('Sorted roles for guild:', guildMember.guild.id);
 }
 
 // TODO: Better error handling

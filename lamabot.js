@@ -151,6 +151,8 @@ bot.on('message', message => {
               sendMessage(channel, core.mention(author) + ", you have no challenge to reject.");
             }
           });          
+        } else if (params[0] === 'stats') {
+          c4.stats(author.id, function(message) { sendMessage(channel, message) });
         }
 
       // TODO: Remove these commands
@@ -236,7 +238,8 @@ function displayHelpEmbed(channel, helpTopic) {
   if (helpTopic && helpTopic !== "") {
     if (helpTopic === "c4") {
       embed.title = "Lamabot c4 help";
-      embed.description = "Challenge a friend to a game of connect 4! Commands for c4 are as follows:";
+      embed.description = "Challenge a friend to a game of connect 4! Commands for c4 are as "
+                        + "follows:";
       embed.fields = [{
         name: "accept",
         value: "Accept a challenge from another user. If you with to play with someone but have " 
@@ -258,6 +261,11 @@ function displayHelpEmbed(channel, helpTopic) {
       {
         name: "reject",
         value: "Reject or rescind a challenge. Useful if you don't want to play with that scrub."
+      },
+      {
+        name: "stats",
+        value: "Displays the wins, losses, and ties that you've achieved over the course of all "
+               + "your games."
       }]
     } else {
       embed.title = "Help topic not found";
@@ -287,24 +295,22 @@ function updateRoles(guildMember) {
 
 // TODO: Better error handling
 function updateTables() {
-  connection.query("CREATE TABLE IF NOT EXISTS users (id BIGINT(20) UNSIGNED NOT NULL PRIMARY KEY, " +
-                   "c4gameId INT, c4statsId INT)", function(error, results) {
-    if (error) {
-      throw error;
-    }
-  });
-  connection.query("CREATE TABLE IF NOT EXISTS c4games (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, " +
-                   "playerOneId BIGINT(20) UNSIGNED, playerTwoId BIGINT(20) UNSIGNED, challenger TINYINT(1), " + 
-                   "currentTurn TINYINT(1), board VARCHAR(139), turnCount TINYINT)", function(error, results) {
-    if (error) {
-      throw error;
-    }
-  });
-  connection.query("CREATE TABLE IF NOT EXISTS c4stats (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, " +
-                   "playerId BIGINT(20) UNSIGNED, wins INT, losses INT, ties INT)", function(error, results) {
-    if (error) {
-      throw error;
-    }
+  var queries = [];
+  queries.push("CREATE TABLE IF NOT EXISTS users (id BIGINT(20) UNSIGNED NOT NULL PRIMARY KEY, "
+               + "c4gameId INT, c4statsId INT)");
+  queries.push("CREATE TABLE IF NOT EXISTS c4games (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, "
+               + "playerOneId BIGINT(20) UNSIGNED, playerTwoId BIGINT(20) UNSIGNED, challenger "  
+               + "TINYINT(1), currentTurn TINYINT(1), board VARCHAR(139), turnCount TINYINT)");
+  queries.push("CREATE TABLE IF NOT EXISTS c4stats (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, "
+               + "playerId BIGINT(20) UNSIGNED, wins INT, losses INT, ties INT)");
+  queries.forEach(function (query) {
+    connection.query(query, function(error, results) {
+      if (error) {
+        throw error;
+      } else {
+        console.log(results);
+      }
+    });
   });
 }
 

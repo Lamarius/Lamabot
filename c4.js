@@ -159,6 +159,20 @@ module.exports = {
         return callback(null);
       }
     });
+  },
+  stats: function (playerId, callback) {
+    getStats(playerId, function(error, stats) {
+      if (error) {
+        throw error;
+      } else if (stats) {
+        return callback(core.mention(playerId) + ', you have ' 
+                        + stats.wins + (stats.wins === 1 ? ' win, ' : ' wins, ') 
+                        + stats.losses + (stats.losses === 1 ? ' loss, and ' : ', losses, and ') 
+                        + stats.ties + (stats.ties === 1 ? ' tie.' : ' ties.'));
+      } else {
+        return callback(core.mention(playerId) + ', you have no recorded stats.');
+      }
+    });
   }
 }
 
@@ -323,6 +337,27 @@ function getStatsId(playerId, callback) {
   });
 }
 
+function getStats(playerId, callback) {
+  getStatsId(playerId, function(error, statsId) {
+    if (error) {
+      return callback(error, null);
+    } else if (statsId) {
+      var sql = 'SELECT * FROM c4stats WHERE id = ?'
+      var values = [statsId];
+
+      connection.query(sql, values, function(error, results) {
+        if (error) {
+          return callback(error, null);
+        } else {
+          return callback(null, results[0]);
+        }
+      });
+    } else {
+      return callback(null, null);
+    }
+  });
+}
+
 function createStatsEntry(stats, callback) {
   var sql = 'INSERT INTO c4stats SET ?';
 
@@ -336,12 +371,12 @@ function createStatsEntry(stats, callback) {
 }
 
 function updateStatsEntry(stats, callback) {
-  getStatsId(stats.Playerid, function(error, statsId) {
+  getStatsId(stats.playerId, function(error, statsId) {
     if (error) {
       return callback(error, null);
     } else if (statsId) {
-      var sql = 'UPDATE c4stats SET Wins = Wins + ?, Losses = Losses + ?, Ties = Ties + ? WHERE id = ?';
-      var values = [stats.Wins, stats.Losses, stats.Ties, stats.Playerid];
+      var sql = 'UPDATE c4stats SET wins = wins + ?, losses = losses + ?, ties = ties + ? WHERE id = ?';
+      var values = [stats.wins, stats.losses, stats.ties, statsId];
 
       connection.query(sql, values, function(error, results) {
         if (error) {
@@ -356,7 +391,8 @@ function updateStatsEntry(stats, callback) {
           return callback(error, null);
         } else {
           var sql = 'UPDATE users SET c4statsId = ? WHERE id = ?';
-          var values = [statsId, stats.playerid];
+          var values = [statsId, stats.playerId];
+          console.log(values);
 
           connection.query(sql, values, function(error, results) {
             if (error) {
@@ -372,7 +408,7 @@ function updateStatsEntry(stats, callback) {
 }
 
 function addWin(playerId, callback) {
-  updateStatsEntry({Playerid: playerId, Wins: 1, Losses: 0, Ties: 0}, function(error, results) {
+  updateStatsEntry({playerId: playerId, wins: 1, losses: 0, ties: 0}, function(error, results) {
     if (error) {
       return callback(error, null);
     } else {
@@ -382,7 +418,7 @@ function addWin(playerId, callback) {
 }
 
 function addLoss(playerId, callback) {
-  updateStatsEntry({Playerid: playerId, Wins: 0, Losses: 1, Ties: 0}, function(error, results) {
+  updateStatsEntry({playerId: playerId, wins: 0, losses: 1, ties: 0}, function(error, results) {
     if (error) {
       return callback(error, null);
     } else {
@@ -392,7 +428,7 @@ function addLoss(playerId, callback) {
 }
 
 function addTie(playerId, callback) {
-  updateStatsEntry({Playerid: playerId, Wins: 0, Losses: 0, Ties: 1}, function(error, results) {
+  updateStatsEntry({playerId: playerId, wins: 0, losses: 0, ties: 1}, function(error, results) {
     if (error) {
       return callback(error, null);
     } else {

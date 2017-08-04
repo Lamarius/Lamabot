@@ -10,7 +10,8 @@ module.exports = {
       host: 'host',
       user: 'user',
       password: 'password',
-      database: 'database'
+      database: 'database',
+      supportBigNumbers: true
     };
 
     var connection = mysql.createConnection(db_config);

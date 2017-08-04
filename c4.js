@@ -324,7 +324,7 @@ function getStatsId(playerId, callback) {
 }
 
 function createStatsEntry(stats, callback) {
-  var sql = 'INSERT INTO C4Stats SET ?';
+  var sql = 'INSERT INTO c4stats SET ?';
 
   connection.query(sql, stats, function(error, results) {
     if (error) {
@@ -340,7 +340,7 @@ function updateStatsEntry(stats, callback) {
     if (error) {
       return callback(error, null);
     } else if (statsId) {
-      var sql = 'UPDATE C4Stats SET Wins = Wins + ?, Losses = Losses + ?, Ties = Ties + ? WHERE id = ?';
+      var sql = 'UPDATE c4stats SET Wins = Wins + ?, Losses = Losses + ?, Ties = Ties + ? WHERE id = ?';
       var values = [stats.Wins, stats.Losses, stats.Ties, stats.Playerid];
 
       connection.query(sql, values, function(error, results) {

@@ -331,8 +331,10 @@ function getStatsId(playerId, callback) {
   connection.query(sql, values, function(error, results) {
     if (error) {
       return callback(error, null);
-    } else {
+    } else if (results[0]) {
       return callback(null, results[0].c4statsId);
+    } else {
+      return callback(null, null);
     }
   });
 }

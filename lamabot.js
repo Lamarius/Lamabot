@@ -297,8 +297,6 @@ function updateTables() {
     connection.query(query, function(error, results) {
       if (error) {
         throw error;
-      } else {
-        console.log(results);
       }
     });
   });

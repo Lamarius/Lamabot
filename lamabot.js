@@ -51,7 +51,7 @@ bot.on('message', message => {
         displayHelpEmbed(channel, params[0]);
 
       // Connect 4 commands
-      // TODO: Move all this stuff out and place inside a function
+      // TODO: Move logic out of this function and into the various c4 exports, have them all return strings
       } else if (match[2] === 'c4') {
         if (params[0] === 'accept') {
           // Accept a challenge and start a new game
@@ -150,21 +150,10 @@ bot.on('message', message => {
             } else {
               sendMessage(channel, core.mention(author) + ", you have no challenge to reject.");
             }
-          });          
+          });
         } else if (params[0] === 'stats') {
           c4.stats(author.id, function(message) { sendMessage(channel, message) });
-        }
-
-      // TODO: Remove these commands
-      // Test commands
-      } else if (match[2] === 'die') {
-        // Throw an error to test error handling
-        if (author.id === admin) {
-          throw new Error("I'm testing the bot's error handling.");
-        } else {
-          sendMessage(channel, "What gives you the right to end my life? (Sorry but only the admin" 
-                      + " can use this command.");
-        }  
+        } 
       }
     }
   } catch (error) {
@@ -196,7 +185,8 @@ function canSendMessages(channel) {
     if (denies.has('SEND_MESSAGES')) return false;
   }
 
-  // Check the bot's roles and the channel's role-based overwrites to see if it allows the bot to send messages
+  // Check the bot's roles and the channel's role-based overwrites to see if it allows the bot to 
+  // send messages
   if (roles) {
     var canSendMessages = false;
     var overwriteDenySendMessages = false;
@@ -218,7 +208,7 @@ function canSendMessages(channel) {
 
     return overwriteDenySendMessages ? false : canSendMessages;
   }
-  // Wow, nothing? For real? Well, I think that means it can't send messages
+  // Should never reach this since the bot will always inherit permissions from the @everyone role
   return false;
 }
 

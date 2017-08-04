@@ -394,7 +394,6 @@ function updateStatsEntry(stats, callback) {
         } else {
           var sql = 'UPDATE users SET c4statsId = ? WHERE id = ?';
           var values = [statsId, stats.playerId];
-          console.log(values);
 
           connection.query(sql, values, function(error, results) {
             if (error) {

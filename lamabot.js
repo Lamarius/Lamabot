@@ -275,14 +275,6 @@ function displayHelpEmbed(channel, helpTopic) {
   sendMessage(channel, {embed: embed});
 }
 
-function updateRoles(guildMember) {
-  sortedRoles[guildMember.guild.id] = Object.keys(guildMember.roles).sort(function (a, b) { 
-    console.log(a);
-    return guildMember.roles.get(a).position - guildMember.roles.get(b).position 
-  });
-  console.log('Sorted roles for guild:', guildMember.guild.id);
-}
-
 // TODO: Better error handling
 function updateTables() {
   var queries = [];

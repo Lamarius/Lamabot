@@ -7,6 +7,7 @@
 // Import the discord.js module and other modules
 const Discord = require('discord.js');
 const c4 = require('./c4.js');
+const tos = require('./tos.js');
 const core = require('./core.js');
 const connectionInfo = require('./connectionInfo.js');
 
@@ -46,115 +47,137 @@ bot.on('message', message => {
   try {
     if (canSendMessages(channel) && match && match.length > 2) {
       var params = match[3].split(' ');
-      // Help commands
-      if (match[2] === 'help') {
-        displayHelpEmbed(channel, params[0]);
-
-      // Connect 4 commands
-      // TODO: Move logic out of this function and into the various c4 exports, have them all return strings
-      } else if (match[2] === 'c4') {
+      // ToS commands
+      if (match[2] === 'tos') {
         if (params[0] === 'accept') {
-          // Accept a challenge and start a new game
-          c4.acceptChallenge(author.id, function(playerOne, board) {
-            if (board) {
-              var message = [
-                core.mention(author) + " has accepted the challenge!",
-                core.mention(playerOne) + " has the first turn.",
-                board
-              ];
-              sendMessage(channel, message);
-            } else if (playerOne) {
-              sendMessage(channel, "I'm sorry " + core.mention(author) + ", but " + core.mention(playerOne) + " has to be the one to accept your challenge.")
-            } else {
-              sendMessage(channel, "I'm sorry " + core.mention(author) + ", but it looks like you have no challenges.");
-            }
+          tos.accept(author.id, function(message) {
+            sendMessage(channel, message);
           });
-        } else if (params[0] === 'board') {
-          // Display the board the user is currently playing
-          c4.printBoard(author.id, function(board) {
-            if (board) {
-              sendMessage(channel, board);
-            } else {
-              sendMessage(channel, core.mention(author) + ", you have no game.");
-            }
-          });
-        } else if (params[0] === 'challenge') {
-          // Challenge another user to connect 4
-          if (mentions.length > 0) {
-            if (mentions.length === 1) {
-              if (mentions[0] != author) {
-                if (mentions[0] != bot.user) {
-                  c4.challenge(author.id, mentions[0].id, function(result) {
-                    if (result) {
-                      sendMessage(channel, core.mention(mentions[0]) + ", you have been challenged by "
-                                + core.mention(author) + ". Type ``!lbc4 accept`` to accept this challenge,"
-                                + " or ``!lbc4 reject`` to reject it.");
-                    } else {
-                      // At least one of the players is currently in a game, though I suppose something
-                      // else could be wrong
-                      sendMessage(channel, "I'm sorry, neither player can have an active game or challenge.");
-                    }
-                  });
-                } else {
-                  // Player tried to challenge the bot
-                  sendMessage(channel, core.mention(author) + ", you can't challenge me.");
-                }
-              } else {
-                // Player tried to challenge himself/herself
-                sendMessage(channel, core.mention(author) + ", you can't challenge yourself you goof.");
-              }
-            } else {
-              // Player tried to challenge 2 or more other players
-              sendMessage(channel, core.mention(author) + ", challenge only one person, please.");
-            }
+        } else if (params[0] === 'view') {
+          sendMessage(channel, {embed: tos.view()});
+        } else {
+          sendMessage(channel, "I don't recognize any of those commands. Type ``!lbhelp tos`` for help.");
+        }
+      } else {
+        tos.getTosStatus(author.id, function(hasAcceptedTos) {
+          if (!hasAcceptedTos) {
+            var message = "Before you may use any of Lamabot's functions, you must agree to the "
+                        + "terms of service by typing ``!lbtos accept``."
+            sendMessage(channel, message, {embed: tos.view()});
           } else {
-            // Player didn't mention anyone in their challenge
-            sendMessage(channel, core.mention(author) + ", you gotta challenge someone you dingus (use an @mention).");
-          }
-        } else if (params[0] === 'drop') {
-          // Drop a token in the specified column
-          if (params.length < 2) {
-            // No column specified
-            sendMessage(channel, "Please specify a column number between 1 and 7.");
-          } else {
-            var column = parseInt(params[1] - 1)
-            if (column != NaN && column >= 0 && column < 7) {
-              c4.placeToken(author.id, column, function(result, board) {
-                if (result) {
-                  var message = [];
-                  message.push(board);
-                  if (result === 'victory') {
-                    // The player won! Good for him/her
-                    message.push(core.mention(author) + " wins!");
-                  } else if (result === 'draw') {
-                    // It's a draw
-                    message.push("Alright, we'll call it a draw.");
+            // Help commands
+            if (match[2] === 'help') {
+              displayHelpEmbed(channel, params[0]);
+
+            // Connect 4 commands
+            // TODO: Move logic out of this function and into the various c4 exports, have them all return strings
+            } else if (match[2] === 'c4') {
+              if (params[0] === 'accept') {
+                // Accept a challenge and start a new game
+                c4.acceptChallenge(author.id, function(playerOne, board) {
+                  if (board) {
+                    var message = [
+                      core.mention(author) + " has accepted the challenge!",
+                      core.mention(playerOne) + " has the first turn.",
+                      board
+                    ];
+                    sendMessage(channel, message);
+                  } else if (playerOne) {
+                    sendMessage(channel, "I'm sorry " + core.mention(author) + ", but " + core.mention(playerOne) + " has to be the one to accept your challenge.")
                   } else {
-                    // Game is still going
-                    message.push(core.mention(result) + "'s turn.");
+                    sendMessage(channel, "I'm sorry " + core.mention(author) + ", but it looks like you have no challenges.");
                   }
-                  sendMessage(channel, message);
+                });
+              } else if (params[0] === 'board') {
+                // Display the board the user is currently playing
+                c4.printBoard(author.id, function(board) {
+                  if (board) {
+                    sendMessage(channel, board);
+                  } else {
+                    sendMessage(channel, core.mention(author) + ", you have no game.");
+                  }
+                });
+              } else if (params[0] === 'challenge') {
+                // Challenge another user to connect 4
+                if (mentions.length > 0) {
+                  if (mentions.length === 1) {
+                    if (mentions[0] != author) {
+                      if (mentions[0] != bot.user) {
+                        c4.challenge(author.id, mentions[0].id, function(result) {
+                          if (result) {
+                            sendMessage(channel, core.mention(mentions[0]) + ", you have been challenged by "
+                                      + core.mention(author) + ". Type ``!lbc4 accept`` to accept this challenge,"
+                                      + " or ``!lbc4 reject`` to reject it.");
+                          } else {
+                            // At least one of the players is currently in a game, though I suppose something
+                            // else could be wrong
+                            sendMessage(channel, "I'm sorry, neither player can have an active game or challenge.");
+                          }
+                        });
+                      } else {
+                        // Player tried to challenge the bot
+                        sendMessage(channel, core.mention(author) + ", you can't challenge me.");
+                      }
+                    } else {
+                      // Player tried to challenge himself/herself
+                      sendMessage(channel, core.mention(author) + ", you can't challenge yourself you goof.");
+                    }
+                  } else {
+                    // Player tried to challenge 2 or more other players
+                    sendMessage(channel, core.mention(author) + ", challenge only one person, please.");
+                  }
                 } else {
-                  sendMessage(channel, core.mention(author) + ", it's not your turn, or you specified a bad column.");
+                  // Player didn't mention anyone in their challenge
+                  sendMessage(channel, core.mention(author) + ", you gotta challenge someone you dingus (use an @mention).");
                 }
-              });
-            } else {
-              // The column specified is invalid, perhaps a number outside the range, perhaps NaN
-              sendMessage(channel, "Please specify a column number between 1 and 7 while it is your turn.");
-            } 
-          }
-        } else if (params[0] === 'reject') {
-          c4.rejectChallenge(author.id, function(opponent) {
-            if (opponent) {
-              sendMessage(channel, "The challenge between " + core.mention(author) + " and " + core.mention(opponent) + " has been rescinded.");
-            } else {
-              sendMessage(channel, core.mention(author) + ", you have no challenge to reject.");
+              } else if (params[0] === 'drop') {
+                // Drop a token in the specified column
+                if (params.length < 2) {
+                  // No column specified
+                  sendMessage(channel, "Please specify a column number between 1 and 7.");
+                } else {
+                  var column = parseInt(params[1] - 1)
+                  if (column != NaN && column >= 0 && column < 7) {
+                    c4.placeToken(author.id, column, function(result, board) {
+                      if (result) {
+                        var message = [];
+                        message.push(board);
+                        if (result === 'victory') {
+                          // The player won! Good for him/her
+                          message.push(core.mention(author) + " wins!");
+                        } else if (result === 'draw') {
+                          // It's a draw
+                          message.push("Alright, we'll call it a draw.");
+                        } else {
+                          // Game is still going
+                          message.push(core.mention(result) + "'s turn.");
+                        }
+                        sendMessage(channel, message);
+                      } else {
+                        sendMessage(channel, core.mention(author) + ", it's not your turn, or you specified a bad column.");
+                      }
+                    });
+                  } else {
+                    // The column specified is invalid, perhaps a number outside the range, perhaps NaN
+                    sendMessage(channel, "Please specify a column number between 1 and 7 while it is your turn.");
+                  } 
+                }
+              } else if (params[0] === 'reject') {
+                c4.rejectChallenge(author.id, function(opponent) {
+                  if (opponent) {
+                    sendMessage(channel, "The challenge between " + core.mention(author) + " and " + core.mention(opponent) + " has been rescinded.");
+                  } else {
+                    sendMessage(channel, core.mention(author) + ", you have no challenge to reject.");
+                  }
+                });
+              } else if (params[0] === 'stats') {
+                c4.stats(author.id, function(message) { sendMessage(channel, message) });
+              } 
             }
-          });
-        } else if (params[0] === 'stats') {
-          c4.stats(author.id, function(message) { sendMessage(channel, message) });
-        } 
+          }
+        });
       }
+      
     }
   } catch (error) {
     var fs = require('fs');
@@ -228,7 +251,7 @@ function displayHelpEmbed(channel, helpTopic) {
   if (helpTopic && helpTopic !== "") {
     if (helpTopic === "c4") {
       embed.title = "Lamabot c4 help";
-      embed.description = "Challenge a friend to a game of connect 4! Commands for c4 are as "
+      embed.description = "Challenge a friend to a game of connect 4. Commands for c4 are as "
                         + "follows:";
       embed.fields = [{
         name: "accept",
@@ -256,6 +279,18 @@ function displayHelpEmbed(channel, helpTopic) {
         name: "stats",
         value: "Displays the wins, losses, and ties that you've achieved over the course of all "
                + "your games."
+      }]  
+    } else if (helpTopic === "tos") {
+      embed.title = "Lamabot tos help";
+      embed.description = "View or accept Lamabot's terms of service. Commands for tos are "
+                        + "as follows:";
+      embed.fields = [{
+        name: "accept",
+        value: "Accept the terms of service. Enables the use of other commands."
+      },
+      {
+        name: "view",
+        value: "View the terms of service."
       }]
     } else {
       embed.title = "Help topic not found";
@@ -269,7 +304,11 @@ function displayHelpEmbed(channel, helpTopic) {
                       + "follows:";
     embed.fields = [{
       name: "c4",
-      value: "Play connect 4."
+      value: "Challenge a friend to a game of connect 4."
+    },
+    {
+      name: "tos",
+      value: "View or accept Lamabot's terms of service."
     }]
   }
   sendMessage(channel, {embed: embed});
@@ -279,7 +318,7 @@ function displayHelpEmbed(channel, helpTopic) {
 function updateTables() {
   var queries = [];
   queries.push("CREATE TABLE IF NOT EXISTS users (id BIGINT(20) UNSIGNED NOT NULL PRIMARY KEY, "
-               + "c4gameId INT, c4statsId INT)");
+               + "tos TINYINT(1), c4gameId INT, c4statsId INT)");
   queries.push("CREATE TABLE IF NOT EXISTS c4games (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, "
                + "playerOneId BIGINT(20) UNSIGNED, playerTwoId BIGINT(20) UNSIGNED, challenger "  
                + "TINYINT(1), currentTurn TINYINT(1), board VARCHAR(139), turnCount TINYINT)");

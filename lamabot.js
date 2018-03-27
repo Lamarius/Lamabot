@@ -6,6 +6,7 @@
 
 // Import the discord.js module and other modules
 const Discord = require('discord.js');
+const mongoose = require('mongoose');
 const c4 = require('./c4.js');
 const tos = require('./tos.js');
 const core = require('./core.js');
@@ -29,11 +30,20 @@ var connection = connectionInfo.connection();
 // The ready event is vital, it means that your bot will only start reacting to information
 // from Discord _after_ ready is emitted
 bot.on('ready', () => {
+  try {
+    mongoose.connect(connectionInfo.mongoUrl);
+    var db = mongoose.connection;
+    db.on('error', error => {if (error) throw error;});
+    db.once('open', () => {console.log('Mongoose connected!');});
+  } catch (error) {
+    console.log(error);
+  }
+
   console.log('Lamabot reporting for duty!');
   bot.user.setGame('!lbhelp');
 
   // Create/Update database tables
-  updateTables();
+  //updateTables();
 });
 
 // Create an event listener for messages
@@ -50,7 +60,7 @@ bot.on('message', message => {
       // ToS commands
       if (match[2] === 'tos') {
         if (params[0] === 'accept') {
-          tos.accept(author.id, function(message) {
+          tos.accept(author.id, message => {
             sendMessage(channel, message);
           });
         } else if (params[0] === 'view') {
@@ -59,7 +69,7 @@ bot.on('message', message => {
           sendMessage(channel, "I don't recognize any of those commands. Type ``!lbhelp tos`` for help.");
         }
       } else {
-        tos.getTosStatus(author.id, function(hasAcceptedTos) {
+        tos.getTosStatus(author.id, hasAcceptedTos => {
           if (!hasAcceptedTos) {
             var message = "Before you may use any of Lamabot's functions, you must agree to the "
                         + "terms of service by typing ``!lbtos accept``."
@@ -74,7 +84,7 @@ bot.on('message', message => {
             } else if (match[2] === 'c4') {
               if (params[0] === 'accept') {
                 // Accept a challenge and start a new game
-                c4.acceptChallenge(author.id, function(playerOne, board) {
+                c4.acceptChallenge(author.id, (playerOne, board) => {
                   if (board) {
                     var message = [
                       core.mention(author) + " has accepted the challenge!",
@@ -83,14 +93,17 @@ bot.on('message', message => {
                     ];
                     sendMessage(channel, message);
                   } else if (playerOne) {
-                    sendMessage(channel, "I'm sorry " + core.mention(author) + ", but " + core.mention(playerOne) + " has to be the one to accept your challenge.")
+                    sendMessage(channel, "I'm sorry " + core.mention(author) + ", but " 
+                                + core.mention(playerOne) + " has to be the one to accept your "
+                                + "challenge.");
                   } else {
-                    sendMessage(channel, "I'm sorry " + core.mention(author) + ", but it looks like you have no challenges.");
+                    sendMessage(channel, "I'm sorry " + core.mention(author) + ", but it looks "
+                                + "like you have no challenges.");
                   }
                 });
               } else if (params[0] === 'board') {
                 // Display the board the user is currently playing
-                c4.printBoard(author.id, function(board) {
+                c4.printBoard(author.id, board => {
                   if (board) {
                     sendMessage(channel, board);
                   } else {
@@ -103,15 +116,17 @@ bot.on('message', message => {
                   if (mentions.length === 1) {
                     if (mentions[0] != author) {
                       if (mentions[0] != bot.user) {
-                        c4.challenge(author.id, mentions[0].id, function(result) {
+                        c4.challenge(author.id, mentions[0].id, result => {
                           if (result) {
-                            sendMessage(channel, core.mention(mentions[0]) + ", you have been challenged by "
-                                      + core.mention(author) + ". Type ``!lbc4 accept`` to accept this challenge,"
-                                      + " or ``!lbc4 reject`` to reject it.");
+                            sendMessage(channel, core.mention(mentions[0]) + ", you have been "
+                                        + "challenged by " + core.mention(author) + ". Type "
+                                        + "``!lbc4 accept`` to accept this challenge, or "
+                                        + "``!lbc4 reject`` to reject it.");
                           } else {
                             // At least one of the players is currently in a game, though I suppose something
                             // else could be wrong
-                            sendMessage(channel, "I'm sorry, neither player can have an active game or challenge.");
+                            sendMessage(channel, "I'm sorry, neither player can have an active "
+                                        + "game or challenge.");
                           }
                         });
                       } else {
@@ -120,7 +135,8 @@ bot.on('message', message => {
                       }
                     } else {
                       // Player tried to challenge himself/herself
-                      sendMessage(channel, core.mention(author) + ", you can't challenge yourself you goof.");
+                      sendMessage(channel, core.mention(author) + ", you can't challenge yourself "
+                                  + "you goof.");
                     }
                   } else {
                     // Player tried to challenge 2 or more other players
@@ -128,7 +144,8 @@ bot.on('message', message => {
                   }
                 } else {
                   // Player didn't mention anyone in their challenge
-                  sendMessage(channel, core.mention(author) + ", you gotta challenge someone you dingus (use an @mention).");
+                  sendMessage(channel, core.mention(author) + ", you gotta challenge someone you "
+                              + "dingus (use an @mention).");
                 }
               } else if (params[0] === 'drop') {
                 // Drop a token in the specified column
@@ -138,7 +155,7 @@ bot.on('message', message => {
                 } else {
                   var column = parseInt(params[1] - 1)
                   if (column != NaN && column >= 0 && column < 7) {
-                    c4.placeToken(author.id, column, function(result, board) {
+                    c4.placeToken(author.id, column, (result, board) => {
                       if (result) {
                         var message = [];
                         message.push(board);
@@ -154,24 +171,27 @@ bot.on('message', message => {
                         }
                         sendMessage(channel, message);
                       } else {
-                        sendMessage(channel, core.mention(author) + ", it's not your turn, or you specified a bad column.");
+                        sendMessage(channel, core.mention(author) + ", it's not your turn, or you "
+                                    + "specified a bad column.");
                       }
                     });
                   } else {
                     // The column specified is invalid, perhaps a number outside the range, perhaps NaN
-                    sendMessage(channel, "Please specify a column number between 1 and 7 while it is your turn.");
+                    sendMessage(channel, "Please specify a column number between 1 and 7 while it "
+                                + "is your turn.");
                   } 
                 }
               } else if (params[0] === 'reject') {
-                c4.rejectChallenge(author.id, function(opponent) {
+                c4.rejectChallenge(author.id, opponent => {
                   if (opponent) {
-                    sendMessage(channel, "The challenge between " + core.mention(author) + " and " + core.mention(opponent) + " has been rescinded.");
+                    sendMessage(channel, "The challenge between " + core.mention(author) + " and " 
+                                + core.mention(opponent) + " has been rescinded.");
                   } else {
                     sendMessage(channel, core.mention(author) + ", you have no challenge to reject.");
                   }
                 });
               } else if (params[0] === 'stats') {
-                c4.stats(author.id, function(message) { sendMessage(channel, message) });
+                c4.stats(author.id, message => { sendMessage(channel, message) });
               } 
             }
           }
@@ -181,7 +201,7 @@ bot.on('message', message => {
     }
   } catch (error) {
     var fs = require('fs');
-    fs.appendFile(logFile, error.stack + '\n', function (err) {
+    fs.appendFile(logFile, error.stack + '\n', err => {
       if (err) {
         return console.log(err);
       } else {
@@ -189,8 +209,8 @@ bot.on('message', message => {
         console.log("Wrote error to /logs/error.txt");
       }
     });
-    sendMessage(channel, "I'm dying... *death gurgle*... Oh hey I was given another chance. Anyways, "
-                + core.mention(admin) + ", `" + error.name + "` happened. :(");
+    sendMessage(channel, "I'm dying... *death gurgle*... Oh hey I was given another chance. "
+                + "Anyways, " + core.mention(admin) + ", `" + error.name + "` happened. :(");
   }
 });
 
@@ -213,7 +233,7 @@ function canSendMessages(channel) {
   if (roles) {
     var canSendMessages = false;
     var overwriteDenySendMessages = false;
-    roles.forEach(function (role) {
+    roles.forEach(role => {
       var roleOverwrite = permissionOverwrites.get(role.id);
       if (roleOverwrite && roleOverwrite.type === 'role') {
         var allows = new Discord.Permissions(roleOverwrite.allow);
@@ -324,8 +344,8 @@ function updateTables() {
                + "TINYINT(1), currentTurn TINYINT(1), board VARCHAR(139), turnCount TINYINT)");
   queries.push("CREATE TABLE IF NOT EXISTS c4stats (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, "
                + "playerId BIGINT(20) UNSIGNED, wins INT, losses INT, ties INT)");
-  queries.forEach(function (query) {
-    connection.query(query, function(error, results) {
+  queries.forEach(query => {
+    connection.query(query, (error, results) => {
       if (error) {
         throw error;
       }
@@ -334,4 +354,6 @@ function updateTables() {
 }
 
 // log our bot in
+console.log("Token: " + token);
+console.log("dbconnstring: " + connectionInfo.mongoUrl);
 bot.login(token);

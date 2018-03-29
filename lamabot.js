@@ -10,13 +10,13 @@ const mongoose = require('mongoose');
 const c4 = require('./c4.js');
 const tos = require('./tos.js');
 const core = require('./core.js');
-const connectionInfo = require('./connectionInfo.js');
+const config = require('./config.js');
 
 // Create an intance of a Discord Client, and call it bot
 const bot = new Discord.Client();
 
 // The token of your bot - https://discordapp.com/developers/applications/me
-const token = connectionInfo.token;
+const token = config.token;
 
 // The id of the bot admin
 const admin = '177970052610392064';
@@ -25,13 +25,13 @@ const admin = '177970052610392064';
 const logFile = './logs/log.txt';
 
 // Database connection
-var connection = connectionInfo.connection();
+var connection = config.connection();
 
 // The ready event is vital, it means that your bot will only start reacting to information
 // from Discord _after_ ready is emitted
 bot.on('ready', () => {
   try {
-    mongoose.connect(connectionInfo.mongoUrl);
+    mongoose.connect(config.mongoUrl);
     var db = mongoose.connection;
     db.on('error', error => {if (error) throw error;});
     db.once('open', () => {console.log('Mongoose connected!');});
@@ -41,9 +41,6 @@ bot.on('ready', () => {
 
   console.log('Lamabot reporting for duty!');
   bot.user.setGame('!lbhelp');
-
-  // Create/Update database tables
-  //updateTables();
 });
 
 // Create an event listener for messages
@@ -53,6 +50,7 @@ bot.on('message', message => {
   var channel = message.channel;
   var mentions = message.mentions.users.array();
   var author = message.author;
+  var server = message.server;
 
   try {
     if (canSendMessages(channel) && match && match.length > 2) {
@@ -201,11 +199,12 @@ bot.on('message', message => {
     }
   } catch (error) {
     var fs = require('fs');
-    fs.appendFile(logFile, error.stack + '\n', err => {
+    var date = new Date();
+    fs.appendFile(logFile, "(" + date.toLocaleString() + ") " + error.stack + '\n\n', err => {
       if (err) {
         return console.log(err);
       } else {
-        console.log(error);
+        console.log("(" + date.toLocaleString() + ") " + error);
         console.log("Wrote error to /logs/error.txt");
       }
     });
@@ -334,26 +333,7 @@ function displayHelpEmbed(channel, helpTopic) {
   sendMessage(channel, {embed: embed});
 }
 
-// TODO: Better error handling
-function updateTables() {
-  var queries = [];
-  queries.push("CREATE TABLE IF NOT EXISTS users (id BIGINT(20) UNSIGNED NOT NULL PRIMARY KEY, "
-               + "tos TINYINT(1), c4gameId INT, c4statsId INT)");
-  queries.push("CREATE TABLE IF NOT EXISTS c4games (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, "
-               + "playerOneId BIGINT(20) UNSIGNED, playerTwoId BIGINT(20) UNSIGNED, challenger "  
-               + "TINYINT(1), currentTurn TINYINT(1), board VARCHAR(139), turnCount TINYINT)");
-  queries.push("CREATE TABLE IF NOT EXISTS c4stats (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, "
-               + "playerId BIGINT(20) UNSIGNED, wins INT, losses INT, ties INT)");
-  queries.forEach(query => {
-    connection.query(query, (error, results) => {
-      if (error) {
-        throw error;
-      }
-    });
-  });
-}
-
 // log our bot in
 console.log("Token: " + token);
-console.log("dbconnstring: " + connectionInfo.mongoUrl);
+console.log("dbconnstring: " + config.mongoUrl);
 bot.login(token);

@@ -3,13 +3,13 @@
  */
 
 const core = require('./core.js');
-const connectionInfo = require('./connectionInfo.js');
+const config = require('./config.js');
 
 const EMPTY = ':white_circle:';
 const PLAYER_ONE = ':red_circle:';
 const PLAYER_TWO = ':large_blue_circle:';
 
-var connection = connectionInfo.connection();
+var connection = config.connection();
 
 module.exports = {
   challenge: function (playerOneId, playerTwoId, callback) {

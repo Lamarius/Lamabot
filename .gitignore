@@ -57,11 +57,5 @@ typings/
 # dotenv environment variables file
 .env
 
-# super secret keys and stuff
-keys
-
-# mysql login stuff
-connectionInfo.js
-
 # scripts
 scripts

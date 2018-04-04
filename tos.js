@@ -2,12 +2,13 @@
   Terms of Service module for Lamabot
  */
 
-const core = require('./core.js');
 const mongoose = require('mongoose');
-var Tos = require('./models/tos');
+const core = require('./core');
+const Tos = require('./models/tos');
+const User = require('./models/user');
 
-var tosVersion = 1;
-var tosEmbed = {
+const tosVersion = 1;
+const tosEmbed = {
   title:  "Lamabot Terms of Service",
   description: "By using this Lamabot, you agree to the following:",
   fields: [{
@@ -33,8 +34,14 @@ module.exports = {
           if (error) {
             throw error;
           } else {
-            return callback("Thank you, " + core.mention(userId) + ", for accepting the terms of " 
-                            + "service. You may now use my features!");
+            createUser(userId, (error, result) => {
+              if (error) {
+                throw error;
+              } else {
+                return callback("Thank you, " + core.mention(userId) + ", for accepting the terms "
+                                + "of service. You may now use my features!");
+              }
+            });
           }
         });
       }
@@ -53,14 +60,13 @@ module.exports = {
       }
     });
   }
-}
+};
 
 function getTosEntry(userId, callback) {
   Tos.findOne( {uid: userId}, (error, entry) => {
     if (error) {
       return callback(error, null);
     } else {
-      console.log(entry);
       return callback(null, entry);
     }
   });
@@ -74,6 +80,17 @@ function acceptTos(userId, entry, callback) {
 
   entry.tosVersion = tosVersion;
   entry.save((error, entry, numAffected) => {
+    if (error) {
+      return callback(error, null);
+    } else {
+      return callback(null, entry);
+    }
+  });
+}
+
+function createUser(userId, callback) {
+  var user = new User({ uid: userId, games:[] });
+  user.save((error, entry, numAffected) => {
     if (error) {
       return callback(error, null);
     } else {

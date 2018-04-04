@@ -1,13 +1,13 @@
 /*
   A bot that allows users to do things
   Current applications are:
-    Connect 4 (c4.js)
+    Connect 4 (cFour.js)
  */
 
 // Import the discord.js module and other modules
 const Discord = require('discord.js');
 const mongoose = require('mongoose');
-const c4 = require('./c4.js');
+const cFour = require('./cFour.js');
 const tos = require('./tos.js');
 const core = require('./core.js');
 const config = require('./config.js');
@@ -23,9 +23,6 @@ const admin = '177970052610392064';
 
 // The location of where log files should go
 const logFile = './logs/log.txt';
-
-// Database connection
-var connection = config.connection();
 
 // The ready event is vital, it means that your bot will only start reacting to information
 // from Discord _after_ ready is emitted
@@ -50,7 +47,7 @@ bot.on('message', message => {
   var channel = message.channel;
   var mentions = message.mentions.users.array();
   var author = message.author;
-  var server = message.server;
+  var server = message.guild;
 
   try {
     if (canSendMessages(channel) && match && match.length > 2) {
@@ -82,7 +79,7 @@ bot.on('message', message => {
             } else if (match[2] === 'c4') {
               if (params[0] === 'accept') {
                 // Accept a challenge and start a new game
-                c4.acceptChallenge(author.id, (playerOne, board) => {
+                cFour.acceptChallenge(author.id, (playerOne, board) => {
                   if (board) {
                     var message = [
                       core.mention(author) + " has accepted the challenge!",
@@ -101,7 +98,7 @@ bot.on('message', message => {
                 });
               } else if (params[0] === 'board') {
                 // Display the board the user is currently playing
-                c4.printBoard(author.id, board => {
+                cFour.printBoard(author.id, board => {
                   if (board) {
                     sendMessage(channel, board);
                   } else {
@@ -110,40 +107,22 @@ bot.on('message', message => {
                 });
               } else if (params[0] === 'challenge') {
                 // Challenge another user to connect 4
-                if (mentions.length > 0) {
-                  if (mentions.length === 1) {
-                    if (mentions[0] != author) {
-                      if (mentions[0] != bot.user) {
-                        c4.challenge(author.id, mentions[0].id, result => {
-                          if (result) {
-                            sendMessage(channel, core.mention(mentions[0]) + ", you have been "
-                                        + "challenged by " + core.mention(author) + ". Type "
-                                        + "``!lbc4 accept`` to accept this challenge, or "
-                                        + "``!lbc4 reject`` to reject it.");
-                          } else {
-                            // At least one of the players is currently in a game, though I suppose something
-                            // else could be wrong
-                            sendMessage(channel, "I'm sorry, neither player can have an active "
-                                        + "game or challenge.");
-                          }
-                        });
-                      } else {
-                        // Player tried to challenge the bot
-                        sendMessage(channel, core.mention(author) + ", you can't challenge me.");
-                      }
-                    } else {
-                      // Player tried to challenge himself/herself
-                      sendMessage(channel, core.mention(author) + ", you can't challenge yourself "
-                                  + "you goof.");
-                    }
+                if (mentions.length === 1) {
+                  if (mentions[0] != bot.user) {
+                    cFour.challenge(server.id, author.id, mentions[0].id, message => {
+                      sendMessage(channel, message);
+                    });
                   } else {
-                    // Player tried to challenge 2 or more other players
-                    sendMessage(channel, core.mention(author) + ", challenge only one person, please.");
+                    // Player tried to challenge the bot
+                    sendMessage(channel, core.mention(author) + ", you can't challenge me.");
                   }
-                } else {
+                } else if (mentions.length === 0) {
                   // Player didn't mention anyone in their challenge
-                  sendMessage(channel, core.mention(author) + ", you gotta challenge someone you "
-                              + "dingus (use an @mention).");
+                  sendMessage(channel, core.mention(author) + ", you need to ``@mention`` someone "
+                              + "to challenge them");
+                } else {
+                  // Player mentioned 2 or more other users in there challenge
+                  sendMessage(channel, core.mention(author) + ", please challenge only one person.");
                 }
               } else if (params[0] === 'drop') {
                 // Drop a token in the specified column
@@ -153,7 +132,7 @@ bot.on('message', message => {
                 } else {
                   var column = parseInt(params[1] - 1)
                   if (column != NaN && column >= 0 && column < 7) {
-                    c4.placeToken(author.id, column, (result, board) => {
+                    cFour.placeToken(author.id, column, (result, board) => {
                       if (result) {
                         var message = [];
                         message.push(board);
@@ -180,7 +159,7 @@ bot.on('message', message => {
                   } 
                 }
               } else if (params[0] === 'reject') {
-                c4.rejectChallenge(author.id, opponent => {
+                cFour.rejectChallenge(author.id, opponent => {
                   if (opponent) {
                     sendMessage(channel, "The challenge between " + core.mention(author) + " and " 
                                 + core.mention(opponent) + " has been rescinded.");
@@ -189,7 +168,7 @@ bot.on('message', message => {
                   }
                 });
               } else if (params[0] === 'stats') {
-                c4.stats(author.id, message => { sendMessage(channel, message) });
+                cFour.stats(author.id, message => { sendMessage(channel, message) });
               } 
             }
           }

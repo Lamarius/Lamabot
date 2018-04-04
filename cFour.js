@@ -14,10 +14,10 @@ const GAME_TYPE = 'cFour';
 
 module.exports = {
   challenge: (serverId, playerOneId, playerTwoId, callback) => {
-    // if (playerOneId === playerTwoId) {
-      // return callback("I'm sorry " + core.mention(playerOneId) + ", but you can't challenge "
-                      // + "yourself");
-    // } else {
+    if (playerOneId === playerTwoId) {
+      return callback("I'm sorry " + core.mention(playerOneId) + ", but you can't challenge "
+                      + "yourself");
+    } else {
       canChallenge(serverId, playerOneId, playerTwoId, (error, isChallengeable) => {
         if (!isChallengeable) {
           return callback("I'm sorry " + core.mention(playerOneId) + ", but you are unable to "
@@ -30,31 +30,7 @@ module.exports = {
                           + "to reject it.");
         }
       });
-    // }
-
-    // canChallenge(serverId, playerOneId, playerTwoId, (error, isChallengeable) => {
-    //   if (error) {
-    //     throw error;
-    //   } else {
-    //     if (isChallengeable) {
-    //       createGame(playerOneId, playerTwoId, (error, gameId) => {
-    //         if (error) {
-    //           throw error;
-    //         } else {
-    //           setGame(playerOneId, playerTwoId, gameId, (error, results) => {
-    //             if (error) {
-    //               throw error;
-    //             } else {
-    //               return callback(true);
-    //             }
-    //           })
-    //         }
-    //       });
-    //     } else {
-    //       return callback(null);
-    //     }
-    //   }
-    // });
+    }
   },
   acceptChallenge: (playerId, callback) => {
     return callback(null);

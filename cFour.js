@@ -15,19 +15,33 @@ const GAME_TYPE = 'cFour';
 module.exports = {
   challenge: (serverId, playerOneId, playerTwoId, callback) => {
     if (playerOneId === playerTwoId) {
+      Player tried to challenge themself
       return callback("I'm sorry " + core.mention(playerOneId) + ", but you can't challenge "
                       + "yourself");
     } else {
       canChallenge(serverId, playerOneId, playerTwoId, (error, isChallengeable) => {
-        if (!isChallengeable) {
+        if (error) {
+          throw error;
+        } else if (!isChallengeable) {
+          console.log('hi');
+          // Player is unable to challenge their opponent, probably due to the opponent already 
+          // having an active game
           return callback("I'm sorry " + core.mention(playerOneId) + ", but you are unable to "
                           + "challenge " + core.mention(playerTwoId) + ". Maybe one of you already "
                           + "has a game active.")
         } else {
-          // setup the challenge
-          return callback(core.mention(playerTwoId) + ", you have been challenged to a game of c4! "
-                          + "Type ``!lbc4 accept`` to accept their challenge, or ``!lbc4 reject`` "
-                          + "to reject it.");
+          console.log('hey');
+          // Drop the gauntlet and setup the challenge
+          createGame(serverId, playerOneId, playerTwoId, error => {
+            if (error) {
+              throw error;
+            } else {
+              return callback(core.mention(playerTwoId) + ", you have been challenged to a game of "
+                              + "c4! Type ``!lbc4 accept`` to accept their challenge, or "
+                              + "``!lbc4 reject`` to reject it.");
+            }
+          })
+          
         }
       });
     }
@@ -173,8 +187,25 @@ module.exports = {
 };
 
 function canChallenge(serverId, playerOneId, playerTwoId, callback) {
-  User.find({ uid: { $in: [playerOneId, playerTwoId] }, games: { $elemMatch:{ type: GAME_TYPE, serverId: serverId } } }, (err, docs) => {
-    return callback(null, !docs || docs.length === 0);
+  User.find({ uid: { $in: [playerOneId, playerTwoId] }}, (err, docs) => {
+    if (err) {
+      return (err, null);
+    } else if (docs.length === 0) {
+      return callback(null, false);
+    } else {
+      var isChallengeable = true;
+      docs.some(doc => {
+        if (doc.games) {
+          doc.games.forEach(game => {
+            if (game.type === GAME_TYPE && game.serverId === serverId && game.currentGameId !== null) {
+              isChallengeable = false;
+              return true;
+            }
+          });
+        }
+      });
+      return callback(null, isChallengeable);
+    }
   });
 }
 
@@ -195,6 +226,36 @@ function canChallenge(serverId, playerOneId, playerTwoId, callback) {
 //   message = message.concat("\n:one::two::three::four::five::six::seven:");
 //   return message;
 // }
+
+function createGame(serverId, playerOneId, playerTwoId, callback) {
+  var cFourGame = new CFourGame({ playerOneId: playerOneId, playerTwoId: playerTwoId });
+  cFourGame.save((err, game) => {
+    if (err) {
+      return callback(err)
+    } else {
+      var query = { 
+        uid: { $in: [playerOneId, playerTwoId] }, 
+        $and: [{ "games.type": {$ne: GAME_TYPE }}, { "games.serverId": {$ne: serverId }}]
+      };
+      var update = { $addToSet: { games: { type: GAME_TYPE, serverId: serverId, stats: { wins: 0, losses: 0, draws: 0 }}}};
+      User.update( query, update, err => {
+        if (err) {
+          return callback(err);
+        } else {
+          var query = { uid: { $in: [playerOneId, playerTwoId] }, "games.type": GAME_TYPE, "games.serverId": serverId};
+          var update = { $set : {"games.$.currentGameId": game._id}}
+          User.update(query, update, err => {
+            if (err) {
+              return callback(err);
+            } else {
+              return callback(null);
+            }
+          })
+        }
+      });
+    }
+  });
+}
 
 // function createGame(playerOneId, playerTwoId, callback) {
 //   var newBoard = JSON.stringify([

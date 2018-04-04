@@ -1,8 +1,16 @@
-var mongoose = require('mongoose');
+const mongoose = require('mongoose');
+const newBoard = [
+    [0,0,0,0,0,0,0],
+    [0,0,0,0,0,0,0],
+    [0,0,0,0,0,0,0],
+    [0,0,0,0,0,0,0],
+    [0,0,0,0,0,0,0],
+    [0,0,0,0,0,0,0]
+  ];
 
 module.exports = mongoose.model('CFourGame', {
   playerOneId: String,
   playerTwoId: String,
-  board: Object,
-  currentTurn: Number
+  currentTurn: { type: Number, default: -1 },
+  board: { type: String, default: JSON.stringify(newBoard) }
 });

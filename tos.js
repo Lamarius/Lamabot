@@ -4,7 +4,6 @@
 
 const mongoose = require('mongoose');
 const core = require('./core');
-const Tos = require('./models/tos');
 const User = require('./models/user');
 
 const tosVersion = 1;
@@ -26,22 +25,16 @@ const tosEmbed = {
 
 module.exports = {
   accept: (userId, callback) => {
-    getTosEntry(userId, (error, entry) => {
-      if (!!entry && entry.tosVersion === tosVersion) {
+    getUser(userId, (error, doc) => {
+      if (!!doc && doc.tosVersion === tosVersion) {
         return callback(core.mention(userId) + ", you have already accepted the terms of service.");
       } else {
-        acceptTos(userId, entry, (error, result) => {
+        acceptTos(userId, (error) => {
           if (error) {
             throw error;
           } else {
-            createUser(userId, (error, result) => {
-              if (error) {
-                throw error;
-              } else {
-                return callback("Thank you, " + core.mention(userId) + ", for accepting the terms "
-                                + "of service. You may now use my features!");
-              }
-            });
+            return callback("Thank you, " + core.mention(userId) + ", for accepting the terms of "
+                            + "service. You may now use my features!");
           }
         });
       }
@@ -51,50 +44,37 @@ module.exports = {
     return tosEmbed;
   },
   getTosStatus: (userId, callback) => {
-    getTosEntry(userId, (error, entry) => {
+    getUser(userId, (error, doc) => {
       if (error) {
         throw error;
       } else {
         // TODO: Send different message for new users vs users who haven't accepted updated tos
-        return callback(!!entry && entry.tosVersion === tosVersion);
+        return callback(!!doc && doc.tosVersion === tosVersion);
       }
     });
   }
 };
 
-function getTosEntry(userId, callback) {
-  Tos.findOne( {uid: userId}, (error, entry) => {
+function getUser(userId, callback) {
+  User.findOne( {uid: userId}, (error, doc) => {
     if (error) {
       return callback(error, null);
     } else {
-      return callback(null, entry);
+      return callback(null, doc);
     }
-  });
+  })
 }
 
-function acceptTos(userId, entry, callback) {
-  if (!entry) {
-    entry = new Tos();
-    entry.uid = userId;
-  }
+function acceptTos(userId, callback) {
+  var query = { uid: userId };
+  var update = { $set: { tosVersion: tosVersion }};
+  var options = { upsert: true, new: true, setDefaultsOnInsert: true };
 
-  entry.tosVersion = tosVersion;
-  entry.save((error, entry, numAffected) => {
+  User.findOneAndUpdate(query, update, options, (error, results) => {
     if (error) {
-      return callback(error, null);
+      return callback(error);
     } else {
-      return callback(null, entry);
-    }
-  });
-}
-
-function createUser(userId, callback) {
-  var user = new User({ uid: userId, games:[] });
-  user.save((error, entry, numAffected) => {
-    if (error) {
-      return callback(error, null);
-    } else {
-      return callback(null, entry);
+      return callback(null);
     }
   });
 }

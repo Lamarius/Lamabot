@@ -15,7 +15,7 @@ const GAME_TYPE = 'cFour';
 module.exports = {
   challenge: (serverId, playerOneId, playerTwoId, callback) => {
     if (playerOneId === playerTwoId) {
-      Player tried to challenge themself
+      // Player tried to challenge themself
       return callback("I'm sorry " + core.mention(playerOneId) + ", but you can't challenge "
                       + "yourself");
     } else {
@@ -23,14 +23,12 @@ module.exports = {
         if (error) {
           throw error;
         } else if (!isChallengeable) {
-          console.log('hi');
           // Player is unable to challenge their opponent, probably due to the opponent already 
           // having an active game
           return callback("I'm sorry " + core.mention(playerOneId) + ", but you are unable to "
                           + "challenge " + core.mention(playerTwoId) + ". Maybe one of you already "
                           + "has a game active.")
         } else {
-          console.log('hey');
           // Drop the gauntlet and setup the challenge
           createGame(serverId, playerOneId, playerTwoId, error => {
             if (error) {
@@ -46,8 +44,24 @@ module.exports = {
       });
     }
   },
-  acceptChallenge: (playerId, callback) => {
-    return callback(null);
+  acceptChallenge: (serverId, playerId, callback) => {
+    getCFourGame(serverId, playerId, (error, game) => {
+      if (error) {
+        throw error;
+      } else if (game.playerTwoId === playerId && game.currentTurn === -1) {
+        game.currentTurn = Math.round(Math.random());
+        game.save();
+        var message = [
+          core.mention(game.playerTwoId) + " has accepted the challenge!",
+          core.mention(game.playerOneId) + " has the first turn.",
+          parseBoard(game.playerOneId, game.playerTwoId, JSON.parse(game.board))
+        ];
+        console.log(game);
+        return callback(message);
+      } else {
+        return callback("I'm sorry " + core.mention(playerId) + ", but you have no challenges.");
+      }
+    });
     // getGameFromPlayerId(playerId, (error, game) => {
     //   if (error) {
     //     throw error;
@@ -209,24 +223,6 @@ function canChallenge(serverId, playerOneId, playerTwoId, callback) {
   });
 }
 
-// function parseBoard(playerOneId, playerTwoId, board) {
-//   var message = core.mention(playerOneId) + " " + PLAYER_ONE + " vs " + core.mention(playerTwoId) + " " + PLAYER_TWO;
-//   board.forEach(row => {
-//     message = message.concat("\n");
-//     row.forEach(space => {
-//       if (space === 0) {
-//         message = message.concat(EMPTY);
-//       } else if (space === 1) {
-//         message = message.concat(PLAYER_ONE);
-//       } else {
-//         message = message.concat(PLAYER_TWO);
-//       }
-//     });
-//   });
-//   message = message.concat("\n:one::two::three::four::five::six::seven:");
-//   return message;
-// }
-
 function createGame(serverId, playerOneId, playerTwoId, callback) {
   var cFourGame = new CFourGame({ playerOneId: playerOneId, playerTwoId: playerTwoId });
   cFourGame.save((err, game) => {
@@ -257,26 +253,23 @@ function createGame(serverId, playerOneId, playerTwoId, callback) {
   });
 }
 
-// function createGame(playerOneId, playerTwoId, callback) {
-//   var newBoard = JSON.stringify([
-//     [0,0,0,0,0,0,0],
-//     [0,0,0,0,0,0,0],
-//     [0,0,0,0,0,0,0],
-//     [0,0,0,0,0,0,0],
-//     [0,0,0,0,0,0,0],
-//     [0,0,0,0,0,0,0]
-//   ]);
-//   var sql = 'INSERT INTO c4games (playerOneId, playerTwoId, challenger, currentTurn, board, turnCount) VALUES (?, ?, ?, ?, ?, ?)';
-//   var values = Math.round(Math.random()) ? [playerOneId, playerTwoId, 1, 1, newBoard, 0]
-//                                          : [playerTwoId, playerOneId, 2, 1, newBoard, 0];
-
-//   connection.query(sql, values, (error, results) => {
-//     if (error) {
-//       return callback(error, null);
-//     }
-//     callback(null, results.insertId);
-//   });
-// }
+function parseBoard(playerOneId, playerTwoId, board) {
+  var message = core.mention(playerOneId) + " " + PLAYER_ONE + " vs " + core.mention(playerTwoId) + " " + PLAYER_TWO;
+  board.forEach(row => {
+    message = message.concat("\n");
+    row.forEach(space => {
+      if (space === 0) {
+        message = message.concat(EMPTY);
+      } else if (space === 1) {
+        message = message.concat(PLAYER_ONE);
+      } else {
+        message = message.concat(PLAYER_TWO);
+      }
+    });
+  });
+  message = message.concat("\n:one::two::three::four::five::six::seven:");
+  return message;
+}
 
 // function setGame(playerOneId, playerTwoId, gameId, callback) {
 //   var sql = 'INSERT INTO users (id, c4gameId) VALUES ? ON DUPLICATE KEY UPDATE c4gameId = ?';
@@ -315,6 +308,32 @@ function createGame(serverId, playerOneId, playerTwoId, callback) {
 //     callback(null, results[0]);
 //   });
 // }
+
+function getCFourGame(serverId, playerId, callback) {
+  var query = { uid: playerId, $and: [{ "games.type": GAME_TYPE }, { "games.serverId": serverId }]};
+
+  User.findOne(query, (err, user) => {
+    if (err) {
+      return callback(err, null);
+    } else {
+      if (user) {
+        user.games.some(game => {
+          if (game.type === GAME_TYPE && game.serverId === serverId) {
+            CFourGame.findOne({ _id: game.currentGameId }, (err, game) => {
+              if (err) {
+                return callback(err, null);
+              } else {
+                return callback(null, game);
+              }
+            });
+          }
+        });
+      } else {
+        return callback(null, null);
+      }
+    }
+  });
+}
 
 // function getGameFromPlayerId(playerId, callback) {
 //   getGameId(playerId, (error, gameId) => {

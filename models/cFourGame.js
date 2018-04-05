@@ -12,5 +12,6 @@ module.exports = mongoose.model('CFourGame', {
   playerOneId: String,
   playerTwoId: String,
   currentTurn: { type: Number, default: -1 },
+  turnCount: { type: Number, default: 0 },
   board: { type: String, default: JSON.stringify(newBoard) }
 });

@@ -53,7 +53,7 @@ module.exports = {
         game.save();
         var message = [
           core.mention(game.playerTwoId) + " has accepted the challenge!",
-          core.mention(game.playerOneId) + " has the first turn.",
+          core.mention(game.currentTurn ? game.playerTwoId : game.playerOneId) + " has the first turn.",
           board
         ];
         return callback(message);

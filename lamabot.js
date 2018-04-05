@@ -81,30 +81,11 @@ bot.on('message', message => {
                 // Accept a challenge and start a new game
                 cFour.acceptChallenge(server.id, author.id, message => {
                   sendMessage(channel, message);
-                  // if (board) {
-                  //   var message = [
-                  //     core.mention(author) + " has accepted the challenge!",
-                  //     core.mention(playerOne) + " has the first turn.",
-                  //     board
-                  //   ];
-                  //   sendMessage(channel, message);
-                  // } else if (playerOne) {
-                  //   sendMessage(channel, "I'm sorry " + core.mention(author) + ", but " 
-                  //               + core.mention(playerOne) + " has to be the one to accept your "
-                  //               + "challenge.");
-                  // } else {
-                  //   sendMessage(channel, "I'm sorry " + core.mention(author) + ", but it looks "
-                  //               + "like you have no challenges.");
-                  // }
                 });
               } else if (params[0] === 'board') {
                 // Display the board the user is currently playing
-                cFour.printBoard(author.id, board => {
-                  if (board) {
-                    sendMessage(channel, board);
-                  } else {
-                    sendMessage(channel, core.mention(author) + ", you have no game.");
-                  }
+                cFour.printBoard(server.id, author.id, message => {
+                  sendMessage(channel, message);
                 });
               } else if (params[0] === 'challenge') {
                 // Challenge another user to connect 4

@@ -38,8 +38,7 @@ module.exports = {
                               + "c4! Type ``!lbc4 accept`` to accept their challenge, or "
                               + "``!lbc4 reject`` to reject it.");
             }
-          })
-          
+          });
         }
       });
     }
@@ -49,38 +48,19 @@ module.exports = {
       if (error) {
         throw error;
       } else if (game.playerTwoId === playerId && game.currentTurn === -1) {
+        var board = parseBoard(game);
         game.currentTurn = Math.round(Math.random());
         game.save();
         var message = [
           core.mention(game.playerTwoId) + " has accepted the challenge!",
           core.mention(game.playerOneId) + " has the first turn.",
-          parseBoard(game.playerOneId, game.playerTwoId, JSON.parse(game.board))
+          board
         ];
-        console.log(game);
         return callback(message);
       } else {
         return callback("I'm sorry " + core.mention(playerId) + ", but you have no challenges.");
       }
     });
-    // getGameFromPlayerId(playerId, (error, game) => {
-    //   if (error) {
-    //     throw error;
-    //   } else if (game) {
-    //     if ((game.challenger === 1 && game.playerTwoId === playerId) || (game.challenger === 2 && game.playerOneId === playerId)) {
-    //       acceptGame(game.id, (error, results) => {
-    //         if (error) {
-    //           throw error;
-    //         } else {
-    //           return callback(game.playerOneId, parseBoard(game.playerOneId, game.playerTwoId, JSON.parse(game.board)));
-    //         }
-    //       });
-    //     } else {
-    //       return callback(playerId === game.playerOneId ? game.playerTwoId : game.playerOneId, null);
-    //     }
-    //   } else {
-    //     return callback(null);
-    //   }
-    // });
   },
   rejectChallenge: (playerId, callback) => {
     return callback(null);
@@ -100,17 +80,16 @@ module.exports = {
     //   }
     // });
   },
-  printboard: (playerId, callback) => {
-    return callback(null);
-    // getGameFromPlayerId(playerId, (error, game) => {
-    //   if (error) {
-    //     throw error;
-    //   } else if (game) {
-    //     return callback(parseBoard(game.playerOneId, game.playerTwoId, JSON.parse(game.board)));
-    //   } else {
-    //     return callback(null);
-    //   }
-    // });
+  printBoard: (serverId, playerId, callback) => {
+    getCFourGame(serverId, playerId, (error, game) => {
+      if (error) {
+        throw error;
+      } else if (game) {
+        return callback(parseBoard(game));
+      } else {
+        return callback(core.mention(playerId) + ", you have no active game.")
+      }
+    });
   },
   placeToken: (playerId, column, callback) => {
     return callback(null);
@@ -201,9 +180,9 @@ module.exports = {
 };
 
 function canChallenge(serverId, playerOneId, playerTwoId, callback) {
-  User.find({ uid: { $in: [playerOneId, playerTwoId] }}, (err, docs) => {
-    if (err) {
-      return (err, null);
+  User.find({ uid: { $in: [playerOneId, playerTwoId] }}, (error, docs) => {
+    if (error) {
+      return (error, null);
     } else if (docs.length === 0) {
       return callback(null, false);
     } else {
@@ -225,24 +204,24 @@ function canChallenge(serverId, playerOneId, playerTwoId, callback) {
 
 function createGame(serverId, playerOneId, playerTwoId, callback) {
   var cFourGame = new CFourGame({ playerOneId: playerOneId, playerTwoId: playerTwoId });
-  cFourGame.save((err, game) => {
-    if (err) {
-      return callback(err)
+  cFourGame.save((error, game) => {
+    if (error) {
+      return callback(error)
     } else {
       var query = { 
         uid: { $in: [playerOneId, playerTwoId] }, 
         $and: [{ "games.type": {$ne: GAME_TYPE }}, { "games.serverId": {$ne: serverId }}]
       };
       var update = { $addToSet: { games: { type: GAME_TYPE, serverId: serverId, stats: { wins: 0, losses: 0, draws: 0 }}}};
-      User.update( query, update, err => {
-        if (err) {
-          return callback(err);
+      User.update( query, update, error => {
+        if (error) {
+          return callback(error);
         } else {
           var query = { uid: { $in: [playerOneId, playerTwoId] }, "games.type": GAME_TYPE, "games.serverId": serverId};
           var update = { $set : {"games.$.currentGameId": game._id}}
-          User.update(query, update, err => {
-            if (err) {
-              return callback(err);
+          User.update(query, update, error => {
+            if (error) {
+              return callback(error);
             } else {
               return callback(null);
             }
@@ -253,9 +232,16 @@ function createGame(serverId, playerOneId, playerTwoId, callback) {
   });
 }
 
-function parseBoard(playerOneId, playerTwoId, board) {
-  var message = core.mention(playerOneId) + " " + PLAYER_ONE + " vs " + core.mention(playerTwoId) + " " + PLAYER_TWO;
-  board.forEach(row => {
+function parseBoard(game) {
+  var message = core.mention(game.playerOneId) + " " + PLAYER_ONE + " vs " 
+              + core.mention(game.playerTwoId) + " " + PLAYER_TWO;
+  if (game.currentTurn === 0) {
+    message = message.concat("\nIt is " + PLAYER_ONE + "'s turn.");
+  } else if (game.currentTurn === 1) {
+    message = message.concat("\nIt is " + PLAYER_TWO + "'s turn.");
+  }
+
+  JSON.parse(game.board).forEach(row => {
     message = message.concat("\n");
     row.forEach(space => {
       if (space === 0) {
@@ -312,16 +298,16 @@ function parseBoard(playerOneId, playerTwoId, board) {
 function getCFourGame(serverId, playerId, callback) {
   var query = { uid: playerId, $and: [{ "games.type": GAME_TYPE }, { "games.serverId": serverId }]};
 
-  User.findOne(query, (err, user) => {
-    if (err) {
-      return callback(err, null);
+  User.findOne(query, (error, user) => {
+    if (error) {
+      return callback(error, null);
     } else {
       if (user) {
         user.games.some(game => {
           if (game.type === GAME_TYPE && game.serverId === serverId) {
-            CFourGame.findOne({ _id: game.currentGameId }, (err, game) => {
-              if (err) {
-                return callback(err, null);
+            CFourGame.findOne({ _id: game.currentGameId }, (error, game) => {
+              if (error) {
+                return callback(error, null);
               } else {
                 return callback(null, game);
               }

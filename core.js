@@ -1,4 +1,6 @@
 // Core functions shared between multiple classes
+const Discord = require('discord.js');
+const bot = new Discord.Client();
 
 module.exports = {
   mention: function (user) {
@@ -6,5 +8,6 @@ module.exports = {
       return "<@" + user.id + ">";
     }
     return "<@" + user + ">";
-  }
+  },
+  bot: bot
 };

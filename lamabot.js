@@ -13,7 +13,7 @@ const core = require('./core.js');
 const config = require('./config.js');
 
 // Create an intance of a Discord Client, and call it bot
-const bot = new Discord.Client();
+var bot = core.bot;
 
 // The token of your bot - https://discordapp.com/developers/applications/me
 const token = config.token;
@@ -90,14 +90,9 @@ bot.on('message', message => {
               } else if (params[0] === 'challenge') {
                 // Challenge another user to connect 4
                 if (mentions.length === 1) {
-                  if (mentions[0] != bot.user) {
-                    cFour.challenge(server.id, author.id, mentions[0].id, message => {
-                      sendMessage(channel, message);
-                    });
-                  } else {
-                    // Player tried to challenge the bot
-                    sendMessage(channel, core.mention(author) + ", you can't challenge me.");
-                  }
+                  cFour.challenge(server.id, author.id, mentions[0].id, message => {
+                    sendMessage(channel, message);
+                  });
                 } else if (mentions.length === 0) {
                   // Player didn't mention anyone in their challenge
                   sendMessage(channel, core.mention(author) + ", you need to ``@mention`` someone "
@@ -141,13 +136,8 @@ bot.on('message', message => {
                   } 
                 }
               } else if (params[0] === 'reject') {
-                cFour.rejectChallenge(author.id, opponent => {
-                  if (opponent) {
-                    sendMessage(channel, "The challenge between " + core.mention(author) + " and " 
-                                + core.mention(opponent) + " has been rescinded.");
-                  } else {
-                    sendMessage(channel, core.mention(author) + ", you have no challenge to reject.");
-                  }
+                cFour.rejectChallenge(server.id, author.id, message => {
+                  sendMessage(channel, message);
                 });
               } else if (params[0] === 'stats') {
                 cFour.stats(author.id, message => { sendMessage(channel, message) });
@@ -156,7 +146,6 @@ bot.on('message', message => {
           }
         });
       }
-      
     }
   } catch (error) {
     var fs = require('fs');

@@ -18,6 +18,9 @@ module.exports = {
       // Player tried to challenge themself
       return callback("I'm sorry " + core.mention(playerOneId) + ", but you can't challenge "
                       + "yourself");
+    } else if (playerTwoId === core.bot.user.id) {
+      // Player tried to challenge the bot
+      return callback(core.mention(author) + ", you can't challenge me.");
     } else {
       canChallenge(serverId, playerOneId, playerTwoId, (error, isChallengeable) => {
         if (error) {
@@ -35,8 +38,8 @@ module.exports = {
               throw error;
             } else {
               return callback(core.mention(playerTwoId) + ", you have been challenged to a game of "
-                              + "c4! Type ``!lbc4 accept`` to accept their challenge, or "
-                              + "``!lbc4 reject`` to reject it.");
+                              + "c4! Type ``!lbc4 accept`` to accept their challenge. Either "
+                              + "player may type ``!lbc4 reject`` to call off the challenge.");
             }
           });
         }
@@ -62,23 +65,17 @@ module.exports = {
       }
     });
   },
-  rejectChallenge: (playerId, callback) => {
-    return callback(null);
-    // getGameFromPlayerId(playerId, (error, game) => {
-    //   if (error) {
-    //     throw error;
-    //   } else if (game) {
-    //     removeGame(game.id, game.playerOneId, game.playerTwoId, (error, results) => {
-    //       if (error) {
-    //         throw error;
-    //       } else {
-    //         return callback(playerId === game.playerOneId ? game.playerTwoId : game.playerOneId);
-    //       }
-    //     });
-    //   } else {
-    //     return callback(null);
-    //   }
-    // });
+  rejectChallenge: (serverId, playerId, callback) => {
+    rejectCFourGame(serverId, playerId, (error, playerIds) => {
+      if (error) {
+        throw error;
+      } else if (playerIds) {
+        return callback("The game between " + core.mention(playerIds.playerOneId) + " and " 
+                        + core.mention(playerIds.playerTwoId) + " has been called off.");
+      } else {
+        return callback("No challenge to reject.");
+      }
+    });
   },
   printBoard: (serverId, playerId, callback) => {
     getCFourGame(serverId, playerId, (error, game) => {
@@ -210,15 +207,22 @@ function createGame(serverId, playerOneId, playerTwoId, callback) {
     } else {
       var query = { 
         uid: { $in: [playerOneId, playerTwoId] }, 
-        $and: [{ "games.type": {$ne: GAME_TYPE }}, { "games.serverId": {$ne: serverId }}]
+        $and: [{ 'games.type': {$ne: GAME_TYPE }}, { 'games.serverId': {$ne: serverId }}]
       };
-      var update = { $addToSet: { games: { type: GAME_TYPE, serverId: serverId, stats: { wins: 0, losses: 0, draws: 0 }}}};
-      User.update( query, update, error => {
+      var update = { 
+        $addToSet: { 
+          games: { type: GAME_TYPE, serverId: serverId, stats: { wins: 0, losses: 0, draws: 0 }}
+        }
+      };
+      User.update(query, update, error => {
         if (error) {
           return callback(error);
         } else {
-          var query = { uid: { $in: [playerOneId, playerTwoId] }, "games.type": GAME_TYPE, "games.serverId": serverId};
-          var update = { $set : {"games.$.currentGameId": game._id}}
+          var query = { 
+            uid: { $in: [playerOneId, playerTwoId]}, 
+            'games.type': GAME_TYPE, 'games.serverId': serverId 
+          };
+          var update = { $set : {'games.$.currentGameId': game._id}}
           User.update(query, update, error => {
             if (error) {
               return callback(error);
@@ -296,8 +300,7 @@ function parseBoard(game) {
 // }
 
 function getCFourGame(serverId, playerId, callback) {
-  var query = { uid: playerId, $and: [{ "games.type": GAME_TYPE }, { "games.serverId": serverId }]};
-
+  var query = { uid: playerId, $and: [{ 'games.type': GAME_TYPE }, { 'games.serverId': serverId }]};
   User.findOne(query, (error, user) => {
     if (error) {
       return callback(error, null);
@@ -321,24 +324,6 @@ function getCFourGame(serverId, playerId, callback) {
   });
 }
 
-// function getGameFromPlayerId(playerId, callback) {
-//   getGameId(playerId, (error, gameId) => {
-//     if (error) {
-//       return callback(error, null);
-//     } else if (gameId) {
-//       getGame(gameId, (error, game) => {
-//         if (error) {
-//           return callback(error, null);
-//         } else {
-//           return callback(null, game);
-//         }
-//       });
-//     } else {
-//       return callback(null, null);
-//     }
-//   });
-// }
-
 // function updateGame(game, callback) {
 //   var sql = 'UPDATE c4games SET currentTurn = ?, board = ?, turnCount = ? WHERE id = ?';
 //   var values = [game.currentTurn, game.board, game.turnCount, game.id];
@@ -351,34 +336,44 @@ function getCFourGame(serverId, playerId, callback) {
 //   });
 // }
 
-// function getGameId(playerId, callback) {
-//   var sql = 'SELECT c4gameId FROM users WHERE id = ?';
-//   var values = [playerId];
+function rejectCFourGame(serverId, playerId, callback) {
+  getCFourGame(serverId, playerId, (error, game) => {
+    if (error) {
+      return callback(error, null);
+    } else if (game && game.currentTurn === -1) {
+      removeCFourGame(serverId, game, (error, playerIds) => {
+        if (error) {
+          return callback(error, null);
+        } else {
+          return callback(null, playerIds);
+        }
+      });
+    } else {
+      return callback(null, null);
+    }
+  });
+}
 
-//   connection.query(sql, values, (error, results) => {
-//     if (error) {
-//       return callback(error, null);
-//     } else if (results.length > 0) {
-//       return callback(null, results[0].c4gameId)
-//     } else {
-//       return callback(null, null);
-//     }
-//   });
-// }
-
-// function removeGame(gameId, playerOneId, playerTwoId, callback) {
-//   // Should I actually delete the games? Might be useful to pull old games for some raisin
-//   var sql = 'UPDATE users SET c4gameId = ? WHERE id = ? OR id = ?';
-//   var values = [null, playerOneId, playerTwoId];
-
-//   connection.query(sql, values, (error, results) => {
-//     if (error) {
-//       return callback(error, null);
-//     } else {
-//       callback(null, results);
-//     }
-//   });
-// }
+function removeCFourGame(serverId, game, callback) {
+  var query = { 
+    uid: { $in: [game.playerOneId, game.playerTwoId]}, 
+    'games.type': GAME_TYPE, 'games.serverId': serverId 
+  };
+  var update = { $set: { 'games.$.currentGameId': null }};
+  User.update(query, update, error => {
+    if (error) {
+      return callback(error, null);
+    } else {
+      game.remove(error => {
+        if (error) {
+          return callback(error, null);
+        } else {
+          return callback(null, { playerOneId: game.playerOneId, playerTwoId: game.playerTwoId });
+        }
+      });
+    }
+  });
+}
 
 // function getStatsId(playerId, callback) {
 //   var sql = 'SELECT c4statsId FROM users WHERE id = ?';

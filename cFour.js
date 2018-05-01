@@ -20,7 +20,7 @@ module.exports = {
                       + "yourself");
     } else if (playerTwoId === core.bot.user.id) {
       // Player tried to challenge the bot
-      return callback(core.mention(author) + ", you can't challenge me.");
+      return callback(core.mention(playerOneId) + ", you can't challenge me.");
     } else {
       canChallenge(serverId, playerOneId, playerTwoId, (error, isChallengeable) => {
         if (error) {
@@ -38,7 +38,7 @@ module.exports = {
               throw error;
             } else {
               return callback(core.mention(playerTwoId) + ", you have been challenged to a game of "
-                              + "c4! Type ``!lbc4 accept`` to accept their challenge. Either "
+                              + "connect 4! Type ``!lbc4 accept`` to accept their challenge. Either "
                               + "player may type ``!lbc4 reject`` to call off the challenge.");
             }
           });
@@ -50,9 +50,9 @@ module.exports = {
     getCFourGame(serverId, playerId, (error, game) => {
       if (error) {
         throw error;
-      } else if (game.playerTwoId === playerId && game.currentTurn === -1) {
-        var board = parseBoard(game);
-        game.currentTurn = Math.round(Math.random());
+      } else if (game && game.playerTwoId === playerId && game.currentTurn === 0) {
+        var board = parseBoard(game, true);
+        game.currentTurn = 1 - 2 * Math.round(Math.random());
         game.save();
         var message = [
           core.mention(game.playerTwoId) + " has accepted the challenge!",
@@ -66,14 +66,20 @@ module.exports = {
     });
   },
   rejectChallenge: (serverId, playerId, callback) => {
-    rejectCFourGame(serverId, playerId, (error, playerIds) => {
+    getCFourGame(serverId, playerId, (error, game) => {
       if (error) {
         throw error;
-      } else if (playerIds) {
-        return callback("The game between " + core.mention(playerIds.playerOneId) + " and " 
-                        + core.mention(playerIds.playerTwoId) + " has been called off.");
+      } else if (game && game.currentTurn === 0) {
+        removeCFourGame(serverId, game, (error, playerIds) => {
+          if (error) {
+            throw error;
+          } else {
+            return callback("The game between " + core.mention(playerIds.playerOneId) + " and " 
+                            + core.mention(playerIds.playerTwoId) + " has been called off.");
+          }
+        });
       } else {
-        return callback("No challenge to reject.");
+        return callback("I'm sorry " + core.mention(playerId) + ", but you have no challenges.");
       }
     });
   },
@@ -82,102 +88,89 @@ module.exports = {
       if (error) {
         throw error;
       } else if (game) {
-        return callback(parseBoard(game));
+        return callback(parseBoard(game, true));
       } else {
         return callback(core.mention(playerId) + ", you have no active game.")
       }
     });
   },
-  placeToken: (playerId, column, callback) => {
-    return callback(null);
-    // getGameFromPlayerId(playerId, (error, game) => {
-    //   if (error) {
-    //     throw error;
-    //   } else if (game) {
-    //     if ((game.playerOneId === playerId && game.currentTurn === 1) || (game.playerTwoId === playerId && game.currentTurn === -1)) {
-    //       var board = JSON.parse(game.board);
-    //       var row = -1;
-    //       for (i = 5; i >= 0; i--) {
-    //         if (board[i][column] === 0) {
-    //           row = i;
-    //           break;
-    //         }
-    //       }
+  placeToken: (serverId, playerId, column, callback) => {
+    getCFourGame(serverId, playerId, (error, game) => {
+      if (error) {
+        throw error;
+      } else if (game) {
+        if ((game.currentTurn === 1 && game.playerOneId === playerId) || (game.currentTurn === -1 && game.playerTwoId === playerId)) {
+          var board = JSON.parse(game.board);
+          if (board[0][column] === 0) {
+            var row = -1;
+            for (i = 5; i >=0; i--) {
+              if (board[i][column] === 0) {
+                row = i;
+                break;
+              }
+            }
 
-    //       if (row !== -1) {
-    //         board[row][column] = game.currentTurn;
-    //         game.board = JSON.stringify(board);
-    //         game.currentTurn *= -1;
-    //         game.turnCount++;
-    //         var opponentId = game.playerOneId === playerId ? game.playerTwoId : game.playerOneId;
-    //         updateGame(game, (error, results) => {
-    //           if (error) {
-    //             throw error;
-    //           }
-    //           if (isVictory(board, game.currentTurn * -1, row, column)) {
-    //             // Victory fanfare
-    //             removeGame(game.id, game.playerOneId, game.playerTwoId, (error, results) => {
-    //               if (error) {
-    //                 throw error;
-    //               }
-    //               addWin(playerId, (error, result) => {
-    //                 if (error) throw error;
-    //               });
-    //               addLoss(opponentId, (error, result) => {
-    //                 if (error) throw error;
-    //               });
-    //               return callback('victory', parseBoard(game.playerOneId, game.playerTwoId, board));
-    //             });
-    //           } else if (game.turnCount >= 42) {
-    //             // Alright, we'll cal it a draw
-    //             removeGame(game.id, game.playerOneId, game.playerTwoId, (error, results =>) {
-    //               if (error) {
-    //                 throw error;
-    //               }
-    //               addTie(game.playerOneId, (error, result) => {
-    //                 if (error) {
-    //                   throw error;
-    //                 }
-    //               });
-    //               addTie(game.playerTwoId, (error, result) => {
-    //                 if (error) {
-    //                   throw error;
-    //                 }
-    //               });
-    //               return callback('draw', parseBoard(game.playerOneId, game.playerTwoId, board));
-    //             });
-    //           } else {
-    //             return callback(opponentId, parseBoard(game.playerOneId, game.playerTwoId, board));
-    //           }
-    //         });
-    //       } else {
-    //         return callback(null);
-    //       }
-    //     }
-    //   } else {
-    //     return callback(null);
-    //   }
-    // });
+            board[row][column] = game.currentTurn;
+            game.board = JSON.stringify(board);
+            game.currentTurn *= -1;
+            game.turnCount++;
+            game.save();
+
+            var message = [];
+            if (isVictory(board, row, column)) {
+              addWin(serverId, playerId);
+              addLoss(serverId, game.currentTurn === 1 ? game.playerOneId : game.playerTwoId);
+              removeCFourGame(serverId, game, (error, playerIds) => {
+                if (error) {
+                  throw error;
+                } else {
+                  message.push(parseBoard(game, false));
+                  message.push(core.mention(playerId) + " has won!");
+                  return callback(message);
+                }
+              });
+            } else if (game.turnCount >= 42) {
+              addDraw(serverId, game.playerOneId, game.playerTwoId);
+              removeCFourGame(serverId, game, (error, playerIds) => {
+                if (error) {
+                  throw error;
+                } else {
+                  message.push(parseBoard(game, false));
+                  message.push("The game is a draw.");
+                  return callback(message);
+                }
+              });
+            } else {
+              message.push(parseBoard(game, true));
+              return callback(message);
+            }
+          } else {
+            // Column is full
+            return callback(core.mention(playerId) + ", that column is full.");
+          }
+        }
+      } else {
+        return callback(core.mention(playerId) + ", you have no active game.");
+      }
+    });
   },
-  stats: (playerId, callback) => {
-    return callback(null);
-    // getStats(playerId, (error, stats) => {
-    //   if (error) {
-    //     throw error;
-    //   } else if (stats) {
-    //     return callback(core.mention(playerId) + ', you have ' 
-    //                     + stats.wins + (stats.wins === 1 ? ' win, ' : ' wins, ') 
-    //                     + stats.losses + (stats.losses === 1 ? ' loss, and ' : ', losses, and ') 
-    //                     + stats.ties + (stats.ties === 1 ? ' tie.' : ' ties.'));
-    //   } else {
-    //     return callback(core.mention(playerId) + ', you have no recorded stats.');
-    //   }
-    // });
+  stats: (serverId, playerId, callback) => {
+    User.find( {uid: playerId, 'games.serverId': serverId, 'games.type': GAME_TYPE }, {'games.$': 1}, (error, docs) => {
+      if (error) {
+        throw error;
+      } else if (docs && docs[0] && docs[0].games && docs[0].games[0] && docs[0].games[0].stats) {
+        var stats = docs[0].games[0].stats;
+        return callback(core.mention(playerId) + ", your connect 4 stats are: ``Wins: " + stats.wins 
+                        + ", Losses: " + stats.losses + ", Draws: " + stats.draws + "``");
+      } else {
+        return callback("You have not played a game of connect 4 yet.");
+      }
+    });
   }
 };
 
 function canChallenge(serverId, playerOneId, playerTwoId, callback) {
-  User.find({ uid: { $in: [playerOneId, playerTwoId] }}, (error, docs) => {
+  User.find({ uid: { $in: [playerOneId, playerTwoId] } }, (error, docs) => {
     if (error) {
       return (error, null);
     } else if (docs.length === 0) {
@@ -207,11 +200,11 @@ function createGame(serverId, playerOneId, playerTwoId, callback) {
     } else {
       var query = { 
         uid: { $in: [playerOneId, playerTwoId] }, 
-        $and: [{ 'games.type': {$ne: GAME_TYPE }}, { 'games.serverId': {$ne: serverId }}]
+        $and: [{ 'games.type': {$ne: GAME_TYPE } }, { 'games.serverId': {$ne: serverId } }]
       };
       var update = { 
         $addToSet: { 
-          games: { type: GAME_TYPE, serverId: serverId, stats: { wins: 0, losses: 0, draws: 0 }}
+          games: { type: GAME_TYPE, serverId: serverId, stats: { wins: 0, losses: 0, draws: 0 } }
         }
       };
       User.update(query, update, error => {
@@ -222,7 +215,7 @@ function createGame(serverId, playerOneId, playerTwoId, callback) {
             uid: { $in: [playerOneId, playerTwoId]}, 
             'games.type': GAME_TYPE, 'games.serverId': serverId 
           };
-          var update = { $set : {'games.$.currentGameId': game._id}}
+          var update = { $set : {'games.$.currentGameId': game._id} }
           User.update(query, update, error => {
             if (error) {
               return callback(error);
@@ -236,12 +229,12 @@ function createGame(serverId, playerOneId, playerTwoId, callback) {
   });
 }
 
-function parseBoard(game) {
+function parseBoard(game, showCurrentTurn) {
   var message = core.mention(game.playerOneId) + " " + PLAYER_ONE + " vs " 
               + core.mention(game.playerTwoId) + " " + PLAYER_TWO;
-  if (game.currentTurn === 0) {
+  if (showCurrentTurn && game.currentTurn === 1) {
     message = message.concat("\nIt is " + PLAYER_ONE + "'s turn.");
-  } else if (game.currentTurn === 1) {
+  } else if (showCurrentTurn && game.currentTurn === -1) {
     message = message.concat("\nIt is " + PLAYER_TWO + "'s turn.");
   }
 
@@ -260,44 +253,6 @@ function parseBoard(game) {
   message = message.concat("\n:one::two::three::four::five::six::seven:");
   return message;
 }
-
-// function setGame(playerOneId, playerTwoId, gameId, callback) {
-//   var sql = 'INSERT INTO users (id, c4gameId) VALUES ? ON DUPLICATE KEY UPDATE c4gameId = ?';
-//   var values = [[[playerOneId, gameId], [playerTwoId, gameId]], gameId];
-
-//   connection.query(sql, values, (error, results) => {
-//     if (error) {
-//       return callback(error, null);
-//     } else {
-//       return callback(null, results);
-//     }
-//   });
-// }
-
-// function acceptGame(gameId, callback) {
-//   var sql = 'UPDATE c4games SET challenger = ? WHERE id = ?';
-//   var values = [0, gameId];
-
-//   connection.query(sql, values, (error, results) => {
-//     if (error) {
-//       return callback(error, null);
-//     } else {
-//       return callback(null, results);
-//     }
-//   });
-// }
-
-// function getGame(gameId, callback) {
-//   var sql = 'SELECT * FROM c4games WHERE id = ?';
-//   var values = [gameId];
-
-//   connection.query(sql, values, (error, results) => {
-//     if (error) {
-//       return callback(error, null);
-//     }
-//     callback(null, results[0]);
-//   });
-// }
 
 function getCFourGame(serverId, playerId, callback) {
   var query = { uid: playerId, $and: [{ 'games.type': GAME_TYPE }, { 'games.serverId': serverId }]};
@@ -324,42 +279,12 @@ function getCFourGame(serverId, playerId, callback) {
   });
 }
 
-// function updateGame(game, callback) {
-//   var sql = 'UPDATE c4games SET currentTurn = ?, board = ?, turnCount = ? WHERE id = ?';
-//   var values = [game.currentTurn, game.board, game.turnCount, game.id];
-
-//   connection.query(sql, values, (error, results) => {
-//     if (error) {
-//       return callback(error, null);
-//     }
-//     callback(null, results);
-//   });
-// }
-
-function rejectCFourGame(serverId, playerId, callback) {
-  getCFourGame(serverId, playerId, (error, game) => {
-    if (error) {
-      return callback(error, null);
-    } else if (game && game.currentTurn === -1) {
-      removeCFourGame(serverId, game, (error, playerIds) => {
-        if (error) {
-          return callback(error, null);
-        } else {
-          return callback(null, playerIds);
-        }
-      });
-    } else {
-      return callback(null, null);
-    }
-  });
-}
-
 function removeCFourGame(serverId, game, callback) {
   var query = { 
-    uid: { $in: [game.playerOneId, game.playerTwoId]}, 
+    uid: { $in: [game.playerOneId, game.playerTwoId] }, 
     'games.type': GAME_TYPE, 'games.serverId': serverId 
   };
-  var update = { $set: { 'games.$.currentGameId': null }};
+  var update = { $set: { 'games.$.currentGameId': null } };
   User.update(query, update, error => {
     if (error) {
       return callback(error, null);
@@ -375,229 +300,149 @@ function removeCFourGame(serverId, game, callback) {
   });
 }
 
-// function getStatsId(playerId, callback) {
-//   var sql = 'SELECT c4statsId FROM users WHERE id = ?';
-//   var values = [playerId];
+function addWin(serverId, playerId) {
+  var query = { uid: playerId, 'games.type': GAME_TYPE, 'games.serverId': serverId };
+  var update = { $inc: { 'games.$.stats.wins': 1 } };
+  User.update(query, update, error => {
+    if (error) {
+      throw error;
+    }
+  });
+}
 
-//   connection.query(sql, values, (error, results) => {
-//     if (error) {
-//       return callback(error, null);
-//     } else if (results[0]) {
-//       return callback(null, results[0].c4statsId);
-//     } else {
-//       return callback(null, null);
-//     }
-//   });
-// }
+function addLoss(serverId, playerId, callback) {
+  var query = { uid: playerId, 'games.type': GAME_TYPE, 'games.serverId': serverId };
+  var update = { $inc: { 'games.$.stats.losses': 1 } };
+  User.update(query, update, error => {
+    if (error) {
+      throw error;
+    }
+  });
+}
 
-// function getStats(playerId, callback) {
-//   getStatsId(playerId, (error, statsId) => {
-//     if (error) {
-//       return callback(error, null);
-//     } else if (statsId) {
-//       var sql = 'SELECT * FROM c4stats WHERE id = ?'
-//       var values = [statsId];
+function addDraw(serverId, playerOneId, playerTwoId, callback) {
+  var query = { 
+    uid: { $in: [playerOneId, playerTwoId] }, 'games.type': GAME_TYPE, 'games.serverId': serverId 
+  };
+  var update = { $inc: { 'games.$.stats.draws': 1 } };
+  User.update(query, update, error => {
+    if (error) {
+      throw error;
+    }
+  });
+}
 
-//       connection.query(sql, values, (error, results) => {
-//         if (error) {
-//           return callback(error, null);
-//         } else {
-//           return callback(null, results[0]);
-//         }
-//       });
-//     } else {
-//       return callback(null, null);
-//     }
-//   });
-// }
+function isVictory(board, row, column) {
+  var currentTurn = board[row][column];
+  if (checkHorizontalVictory(board, currentTurn, row, column) 
+      || checkVerticalVictory(board, row, column) 
+      || checkForwardDiagonalVictory(board, currentTurn, row, column) 
+      || checkBackwardDiagonalVictory(board, currentTurn, row, column)) {
 
-// function createStatsEntry(stats, callback) {
-//   var sql = 'INSERT INTO c4stats SET ?';
+    return true;
+  }
 
-//   connection.query(sql, stats, (error, results) => {
-//     if (error) {
-//       return callback(error, null);
-//     } else {
-//       return callback(null, results.insertId);
-//     }
-//   })
-// }
+  return false;
+}
 
-// function updateStatsEntry(stats, callback) {
-//   getStatsId(stats.playerId, (error, statsId) => {
-//     if (error) {
-//       return callback(error, null);
-//     } else if (statsId) {
-//       var sql = 'UPDATE c4stats SET wins = wins + ?, losses = losses + ?, ties = ties + ? WHERE id = ?';
-//       var values = [stats.wins, stats.losses, stats.ties, statsId];
+// TODO: Merge some of these checkVictory functions together
+// -
+function checkHorizontalVictory(board, currentTurn, row, column) {
+  var score = currentTurn;
+  score += tallyHorizontalLeft(board, currentTurn, row, column) 
+        + tallyHorizontalRight(board, currentTurn, row, column);
+  if (Math.abs(score) >= 4) {
+    console.log("Victory: Horizontal");
+    return true;
+  }
 
-//       connection.query(sql, values, (error, results) => {
-//         if (error) {
-//           return callback(error, null);
-//         } else {
-//           return callback(null, results);
-//         }
-//       });
-//     } else {
-//       createStatsEntry(stats, (error, statsId) => {
-//         if (error) {
-//           return callback(error, null);
-//         } else {
-//           var sql = 'UPDATE users SET c4statsId = ? WHERE id = ?';
-//           var values = [statsId, stats.playerId];
+  return false;
+}
 
-//           connection.query(sql, values, (error, results) => {
-//             if (error) {
-//               return callback(error, null);
-//             } else {
-//               return callback(null, results);
-//             }
-//           });
-//         }
-//       });
-//     }
-//   });
-// }
+function tallyHorizontalLeft(board, currentTurn, row, column) {
+  if (column > 0 && board[row][column - 1] === currentTurn) {
+    return currentTurn + tallyHorizontalLeft(board, currentTurn, row, column - 1);
+  }
 
-// function addWin(playerId, callback) {
-//   updateStatsEntry({playerId: playerId, wins: 1, losses: 0, ties: 0}, (error, results) => {
-//     if (error) {
-//       return callback(error, null);
-//     } else {
-//       return callback(null, results);
-//     }
-//   });
-// }
+  return 0
+}
 
-// function addLoss(playerId, callback) {
-//   updateStatsEntry({playerId: playerId, wins: 0, losses: 1, ties: 0}, (error, results) => {
-//     if (error) {
-//       return callback(error, null);
-//     } else {
-//       return callback(null, results);
-//     }
-//   });
-// }
+function tallyHorizontalRight(board, currentTurn, row, column) {
+  if (column < 6 && board[row][column + 1] === currentTurn) {
+    return currentTurn + tallyHorizontalRight(board, currentTurn, row, column + 1);
+  }
 
-// function addTie(playerId, callback) {
-//   updateStatsEntry({playerId: playerId, wins: 0, losses: 0, ties: 1}, (error, results) => {
-//     if (error) {
-//       return callback(error, null);
-//     } else {
-//       return callback(null, results);
-//     }
-//   });
-// }
+  return 0;
+}
 
-// function isVictory(board, currentTurn, row, column) {
-//   if (checkHorizontalVictory(board, currentTurn, row, column) || 
-//       checkVerticalVictory(board, row, column) ||
-//       checkForwardDiagonalVictory(board, currentTurn, row, column) || 
-//       checkBackwardDiagonalVictory(board, currentTurn, row, column)) {
-//     return true;
-//   }
-
-//   return false;
-// }
-
-// // TODO: Merge some of these checkVictory functions together
-// // -
-// function checkHorizontalVictory(board, currentTurn, row, column) {
-//   var score = currentTurn;
-//   score += tallyHorizontalLeft(board, currentTurn, row, column) 
-//         + tallyHorizontalRight(board, currentTurn, row, column);
-//   if (Math.abs(score) >= 4) {
-//     console.log("Victory: Horizontal");
-//     return true;
-//   }
-
-//   return false;
-// }
-
-// function tallyHorizontalLeft(board, currentTurn, row, column) {
-//   if (column > 0 && board[row][column - 1] === currentTurn) {
-//     return currentTurn + tallyHorizontalLeft(board, currentTurn, row, column - 1);
-//   }
-
-//   return 0
-// }
-
-// function tallyHorizontalRight(board, currentTurn, row, column) {
-//   if (column < 6 && board[row][column + 1] === currentTurn) {
-//     return currentTurn + tallyHorizontalRight(board, currentTurn, row, column + 1);
-//   }
-
-//   return 0;
-// }
-
-// // |
-// function checkVerticalVictory(board, row, column) {
-//   // Only need to check below this spot, since there are no tokens above it
-//   if (row < 3 && Math.abs(board[row][column] + board[row + 1][column] +
-//                           board[row + 2][column] + board[row + 3][column]) === 4) {
-//     console.log("Victory: Vertical");
-//     return true;
-//   }
+// |
+function checkVerticalVictory(board, row, column) {
+  // Only need to look downwards, since tokens always land on the top of the stack
+  if (row < 3 && Math.abs(board[row][column] + board[row + 1][column] +
+                          board[row + 2][column] + board[row + 3][column]) === 4) {
+    console.log("Victory: Vertical");
+    return true;
+  }
   
-//   return false;
-// }
+  return false;
+}
 
-// // /
-// function checkForwardDiagonalVictory(board, currentTurn, row, column) {
-//   var score = currentTurn;
-//   score += tallyForwardDiagonalLeft(board, currentTurn, row, column) 
-//         + tallyForwardDiagonalRight(board, currentTurn, row, column);
+// /
+function checkForwardDiagonalVictory(board, currentTurn, row, column) {
+  var score = currentTurn;
+  score += tallyForwardDiagonalLeft(board, currentTurn, row, column) 
+        + tallyForwardDiagonalRight(board, currentTurn, row, column);
 
-//   if (Math.abs(score) >= 4) {
-//     console.log("Victory: Forward Diagonal");
-//     return true;
-//   }
+  if (Math.abs(score) >= 4) {
+    console.log("Victory: Forward Diagonal");
+    return true;
+  }
 
-//   return false;
-// }
+  return false;
+}
 
-// function tallyForwardDiagonalLeft(board, currentTurn, row, column) {
-//   if (column > 0 && row < 5 && board[row + 1][column - 1] === currentTurn) {
-//     return currentTurn + tallyForwardDiagonalLeft(board, currentTurn, row + 1, column - 1);
-//   }
+function tallyForwardDiagonalLeft(board, currentTurn, row, column) {
+  if (column > 0 && row < 5 && board[row + 1][column - 1] === currentTurn) {
+    return currentTurn + tallyForwardDiagonalLeft(board, currentTurn, row + 1, column - 1);
+  }
 
-//   return 0;
-// }
+  return 0;
+}
 
-// function tallyForwardDiagonalRight(board, currentTurn, row, column) {
-//   if (column < 6 && row > 0 && board[row - 1][column + 1] === currentTurn) {
-//     return currentTurn + tallyForwardDiagonalRight(board, currentTurn, row - 1, column + 1);
-//   }
+function tallyForwardDiagonalRight(board, currentTurn, row, column) {
+  if (column < 6 && row > 0 && board[row - 1][column + 1] === currentTurn) {
+    return currentTurn + tallyForwardDiagonalRight(board, currentTurn, row - 1, column + 1);
+  }
 
-//   return 0;
-// }
+  return 0;
+}
 
-// // \
-// function checkBackwardDiagonalVictory(board, currentTurn, row, column) {
-//   var score = currentTurn;
-//   score += tallyBackwardDiagonalLeft(board, currentTurn, row, column) 
-//         + tallyBackwardDiagonalRight(board, currentTurn, row, column);
+// \
+function checkBackwardDiagonalVictory(board, currentTurn, row, column) {
+  var score = currentTurn;
+  score += tallyBackwardDiagonalLeft(board, currentTurn, row, column) 
+        + tallyBackwardDiagonalRight(board, currentTurn, row, column);
 
-//   if (Math.abs(score) >= 4) {
-//     console.log("Victory: Backward Diagonal");
-//     return true;
-//   }
+  if (Math.abs(score) >= 4) {
+    console.log("Victory: Backward Diagonal");
+    return true;
+  }
 
-//   return false;
-// }
+  return false;
+}
 
-// function tallyBackwardDiagonalLeft(board, currentTurn, row, column) {
-//   if (column > 0 && row > 0 && board[row - 1][column - 1] === currentTurn) {
-//     return currentTurn + tallyBackwardDiagonalLeft(board, currentTurn, row - 1, column - 1);
-//   }
+function tallyBackwardDiagonalLeft(board, currentTurn, row, column) {
+  if (column > 0 && row > 0 && board[row - 1][column - 1] === currentTurn) {
+    return currentTurn + tallyBackwardDiagonalLeft(board, currentTurn, row - 1, column - 1);
+  }
 
-//   return 0;
-// }
+  return 0;
+}
 
-// function tallyBackwardDiagonalRight(board, currentTurn, row, column) {
-//   if (column < 6 && row < 5 && board[row + 1][column + 1] === currentTurn) {
-//     return currentTurn + tallyBackwardDiagonalRight(board, currentTurn, row + 1, column + 1);
-//   }
+function tallyBackwardDiagonalRight(board, currentTurn, row, column) {
+  if (column < 6 && row < 5 && board[row + 1][column + 1] === currentTurn) {
+    return currentTurn + tallyBackwardDiagonalRight(board, currentTurn, row + 1, column + 1);
+  }
 
-//   return 0;
-// }
+  return 0;
+}

@@ -109,30 +109,12 @@ bot.on('message', message => {
                 } else {
                   var column = parseInt(params[1] - 1)
                   if (column != NaN && column >= 0 && column < 7) {
-                    cFour.placeToken(author.id, column, (result, board) => {
-                      if (result) {
-                        var message = [];
-                        message.push(board);
-                        if (result === 'victory') {
-                          // The player won! Good for him/her
-                          message.push(core.mention(author) + " wins!");
-                        } else if (result === 'draw') {
-                          // It's a draw
-                          message.push("Alright, we'll call it a draw.");
-                        } else {
-                          // Game is still going
-                          message.push(core.mention(result) + "'s turn.");
-                        }
-                        sendMessage(channel, message);
-                      } else {
-                        sendMessage(channel, core.mention(author) + ", it's not your turn, or you "
-                                    + "specified a bad column.");
-                      }
+                    cFour.placeToken(server.id, author.id, column, (message) => {
+                      sendMessage(channel, message);
                     });
                   } else {
                     // The column specified is invalid, perhaps a number outside the range, perhaps NaN
-                    sendMessage(channel, "Please specify a column number between 1 and 7 while it "
-                                + "is your turn.");
+                    sendMessage(channel, "Please specify a column number between 1 and 7.");
                   } 
                 }
               } else if (params[0] === 'reject') {
@@ -140,7 +122,9 @@ bot.on('message', message => {
                   sendMessage(channel, message);
                 });
               } else if (params[0] === 'stats') {
-                cFour.stats(author.id, message => { sendMessage(channel, message) });
+                cFour.stats(server.id, author.id, message => { 
+                  sendMessage(channel, message) 
+                });
               } 
             }
           }
